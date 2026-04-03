@@ -116,7 +116,7 @@ async function playPlayer(playerId) {
 
   const source = getPlayableSource(player);
   if (!source) {
-    alert('Choose a repo song for this player first.')
+    alert('Choose a repo song for this player first.');
     return;
   }
 
@@ -128,29 +128,71 @@ async function playPlayer(playerId) {
 
   const audio = state.currentAudio || new Audio();
   state.currentAudio = audio;
+
+  audio.pause();
   audio.src = source;
   audio.preload = 'auto';
-  audio.currentTime = startMs / 1000;
+  audio.playsInline = true;
 
   setClipStatus(player.name || 'Player', `Loading ${player.songTitle || player.sourceName || 'song'}…`);
 
-  const seekAndPlay = async () => {
+  const finishStart = async () => {
     try {
       audio.currentTime = startMs / 1000;
     } catch {}
-    await audio.play();
-    setClipStatus(player.name || 'Player', `${player.songTitle || player.sourceName || 'Song'} • ${player.artist || 'Local audio'}`);
-    state.pauseTimer = window.setTimeout(() => {
-      stopPlayback();
-    }, Math.max(250, endMs - startMs));
+
+    try {
+      if (audio.paused) {
+        await audio.play();
+      }
+
+      setClipStatus(
+        player.name || 'Player',
+        `${player.songTitle || player.sourceName || 'Song'} • ${player.artist || 'Local audio'}`
+      );
+
+      clearTimeout(state.pauseTimer);
+      state.pauseTimer = window.setTimeout(() => {
+        stopPlayback();
+      }, Math.max(250, endMs - startMs));
+    } catch (error) {
+      console.error(error);
+      alert('Playback was blocked on this phone. Tap the same player again.');
+      setClipStatus('—', 'Playback blocked');
+    }
   };
 
-  if (audio.readyState >= 1) {
-    try {
-      await seekAndPlay();
-      return;
-    } catch (error) {}
+  audio.addEventListener(
+    'error',
+    () => {
+      setClipStatus('—', 'Could not load audio file');
+    },
+    { once: true }
+  );
+
+  try {
+    audio.load();
+
+    // This first play call happens directly from the button tap.
+    await audio.play();
+
+    if (audio.readyState >= 1) {
+      await finishStart();
+    } else {
+      audio.addEventListener(
+        'loadedmetadata',
+        () => {
+          finishStart();
+        },
+        { once: true }
+      );
+    }
+  } catch (error) {
+    console.error(error);
+    alert('Playback was blocked on this phone. Tap the same player again.');
+    setClipStatus('—', 'Playback blocked');
   }
+}
 
   audio.addEventListener('loadedmetadata', async function handleLoaded() {
     audio.removeEventListener('loadedmetadata', handleLoaded);
