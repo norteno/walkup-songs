@@ -1,40 +1,36 @@
-# Softball Walk-Up Songs
+# Local Walk-Up Songs App
 
-This is a simple local web app for assigning Spotify songs and clip times to players, then triggering those clips on game day.
+This version removes Spotify completely and plays local audio files instead.
 
-## Already configured
+## Quick start
 
-The Spotify Client ID is already filled in inside `app.js`.
+Open `index.html` from your GitHub Pages site or from a simple local server.
 
-## Before you run it
+## Two ways to add songs
 
-In your Spotify Developer Dashboard, add this exact Redirect URI:
+### Option 1: put songs in your GitHub repo
 
-`http://127.0.0.1:3000/`
+Create a `songs/` folder and add audio files plus a `manifest.json` file.
 
-Spotify now requires exact redirect URI matching for browser auth flows, and local development should use an explicit loopback IP such as `127.0.0.1` rather than `localhost`.
+Example:
 
-## Run it
-
-In this folder:
-
-```bash
-python3 -m http.server 3000
+```json
+{
+  "songs": [
+    { "title": "Thunder", "artist": "Team Mix", "file": "song1.mp3" },
+    { "title": "Fireball", "artist": "Pitbull", "file": "fireball.mp3" }
+  ]
+}
 ```
 
-Then open:
+If you want album art, add an `image` field pointing to a file path or URL.
 
-`http://127.0.0.1:3000/`
+### Option 2: upload files inside the app
+
+Use the **Upload song** button or **Upload for player** on a player card.
+Those uploaded files are stored in browser local storage for that device/browser.
 
 ## Notes
 
-- Spotify Premium is required for the Web Playback SDK.
-- Development-mode Spotify apps also require the app owner to have Premium.
-- If Spotify says playback is blocked, try opening the page directly in Chrome or Safari, not inside another app's iframe.
-- All roster data is stored in your browser `localStorage`.
-
-
-## Updates
-
-- Stop playback with the red Stop button at the top or the square button on any player card.
-- Reorder players with the up/down arrows on each player card.
+- This version is much better for iPhone/iPad because it does not rely on Spotify auth or browser SDK playback.
+- Only use audio files you have permission to use.

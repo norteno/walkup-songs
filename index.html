@@ -3,36 +3,30 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Softball Walk-Up Songs</title>
+  <title>Walk-Up Songs</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <div class="app-shell">
-    <header class="hero">
+    <header id="setupHero" class="hero">
       <div>
-        <p class="eyebrow">Spotify Walk-Up Song Manager</p>
-        <h1>Set each player’s song clip and fire it on game day.</h1>
-        <p class="subtext">Search Spotify, save a roster, and tap a player to control the real Spotify app on your phone.</p>
+        <p class="eyebrow">Local Walk-Up Song Manager</p>
+        <h1>Tap a player and play the exact clip.</h1>
+        <p class="subtext">No Spotify required. Use uploaded audio files or songs stored in your GitHub repo.</p>
       </div>
-      <div class="hero-actions">
-        <button id="connectBtn" class="primary-btn">Connect Spotify</button>
-        <button id="refreshDeviceBtn" class="secondary-btn">Refresh Device</button>
-        <button id="transferBtn" class="secondary-btn">Use This Phone</button>
-        <button id="stopBtn" class="stop-btn" disabled>Stop Music</button>
-        <button id="disconnectBtn" class="ghost-btn" hidden>Disconnect</button>
-      </div>
+      
     </header>
 
-    <section class="status-grid">
+    <section id="setupStatus" class="status-grid">
       <div class="card status-card">
-        <span class="label">Auth</span>
-        <strong id="authStatus">Not connected</strong>
-        <small id="authHint">Use the same URL here and in your Spotify redirect URI list.</small>
+        <span class="label">Mode</span>
+        <strong>Local audio</strong>
+        <small>Works with audio files you upload or place in <code>songs/</code> on GitHub Pages.</small>
       </div>
       <div class="card status-card">
-        <span class="label">Device</span>
-        <strong id="playerStatus">Waiting for Spotify app</strong>
-        <small id="playerHint">Open the Spotify app on your phone first, then tap Refresh Device. Then tap Use This Phone.</small>
+        <span class="label">Library</span>
+        <strong id="libraryStatus">Checking for repo songs…</strong>
+        <small id="libraryHint">Add <code>songs/manifest.json</code> plus your audio files, or upload files inside the app.</small>
       </div>
       <div class="card status-card">
         <span class="label">Now Playing</span>
@@ -41,23 +35,28 @@
       </div>
     </section>
 
+    <div class="toolbar card compact-toolbar">
+      <button id="stopBtn" class="stop-btn">Stop Music</button>
+      <button id="addPlayerBtn" class="secondary-btn">Add player</button>
+      <button id="toggleSetupBtn" class="ghost-btn">Hide top info</button>
+    </div>
+
     <main class="main-grid">
       <section class="card roster-panel">
         <div class="panel-head">
           <div>
             <h2>Roster</h2>
-            <p>Tap play to launch a clip on your active Spotify device. All roster data saves in this browser.</p>
+            <p>Choose a song source for each player, set the clip, then tap play on game day. Your roster saves in this browser.</p>
           </div>
-          <button id="addPlayerBtn" class="secondary-btn">Add player</button>
         </div>
         <div id="rosterList" class="roster-list"></div>
       </section>
 
-      <section class="card search-panel">
+      <section class="card library-panel">
         <div class="panel-head">
           <div>
-            <h2>Song Search</h2>
-            <p>Pick a player, search for a track, and assign it.</p>
+            <h2>Song Library</h2>
+            <p>Repo songs come from <code>songs/manifest.json</code>. Uploaded songs stay in this browser on this device.</p>
           </div>
         </div>
 
@@ -66,31 +65,35 @@
           <select id="selectedPlayer"></select>
         </div>
 
+        <div class="library-actions">
+          <label class="file-label primary-btn" for="fileInput">Upload song</label>
+          <input id="fileInput" type="file" accept="audio/*" hidden />
+        </div>
+
         <div class="field-group">
-          <label for="deviceSelect">Spotify device</label>
-          <select id="deviceSelect"></select>
+          <label for="librarySearch">Search repo songs</label>
+          <input id="librarySearch" type="text" placeholder="Search title or artist" />
         </div>
 
-        <div class="search-row">
-          <input id="searchInput" type="text" placeholder="Search song or artist" />
-          <button id="searchBtn" class="primary-btn">Search</button>
-        </div>
-
-        <div id="searchResults" class="search-results empty-state">
-          Connect Spotify, select a player, and search for a song.
-        </div>
+        <div id="libraryResults" class="search-results empty-state">Loading songs…</div>
       </section>
     </main>
 
-    <section class="card instructions">
-      <h2>Phone setup</h2>
+    <section id="setupInstructions" class="card instructions">
+      <h2>GitHub song setup</h2>
       <ol>
-        <li>Open the regular Spotify app on your phone and start any song once.</li>
-        <li>Open this walk-up app and tap <code>Refresh Device</code>.</li>
-        <li>Choose your phone in the Spotify device list, then tap <code>Use This Phone</code>.</li>
-        <li>Tap a player to play just that clip on your active Spotify device.</li>
+        <li>Create a folder named <code>songs</code> in your GitHub repo.</li>
+        <li>Upload your audio files there, like <code>songs/song1.mp3</code>.</li>
+        <li>Add a file named <code>songs/manifest.json</code> that lists those songs.</li>
+        <li>The app will auto-load them when it starts.</li>
       </ol>
-      <p class="small-note">This version controls the Spotify app on your phone instead of trying to play audio inside the mobile browser.</p>
+      <pre class="manifest-example"><code>{
+  "songs": [
+    { "title": "Thunder", "artist": "Team Mix", "file": "song1.mp3" },
+    { "title": "Fireball", "artist": "Pitbull", "file": "fireball.mp3" }
+  ]
+}</code></pre>
+      <p class="small-note">Only use audio files you have the right to use.</p>
     </section>
   </div>
 
@@ -107,26 +110,28 @@
             <button class="icon-btn delete-btn" title="Delete player">✕</button>
           </div>
         </div>
+
         <div class="song-meta empty-song">No song selected</div>
-        <div class="time-grid">
-          <div class="time-control">
-            <label>
-              Start
-              <input class="start-input time-input" type="text" inputmode="numeric" placeholder="0:45" />
-            </label>
-            <div class="time-stepper">
-              <button class="step-btn start-minus-btn" type="button">-5s</button>
-              <button class="step-btn start-plus-btn" type="button">+5s</button>
+
+        <div class="source-row">
+          <button class="source-btn choose-from-library-btn" type="button">Choose repo song</button>
+          <label class="source-btn upload-for-player-label">
+            Upload for player
+            <input class="upload-for-player-input" type="file" accept="audio/*" hidden />
+          </label>
+        </div>
+
+        <div class="time-grid mobile-time-grid">
+          <div class="time-control big-time-control">
+            <span class="time-label">Start</span>
+            <div class="time-editor single-input-editor">
+              <input class="start-input time-input big-time-input" type="text" inputmode="numeric" placeholder="0:45" />
             </div>
           </div>
-          <div class="time-control">
-            <label>
-              End
-              <input class="end-input time-input" type="text" inputmode="numeric" placeholder="1:00" />
-            </label>
-            <div class="time-stepper">
-              <button class="step-btn end-minus-btn" type="button">-5s</button>
-              <button class="step-btn end-plus-btn" type="button">+5s</button>
+          <div class="time-control big-time-control">
+            <span class="time-label">End</span>
+            <div class="time-editor single-input-editor">
+              <input class="end-input time-input big-time-input" type="text" inputmode="numeric" placeholder="1:00" />
             </div>
           </div>
         </div>

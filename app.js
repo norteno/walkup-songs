@@ -1,119 +1,36 @@
-const CLIENT_ID = '8d83e767e2944f7f9a392318c2f46a2b';
-const SCOPES = [
-  'user-modify-playback-state',
-  'user-read-playback-state'
-];
-
 const STORAGE_KEYS = {
-  roster: 'walkup_roster_v1',
-  codeVerifier: 'spotify_pkce_verifier',
-  accessToken: 'spotify_access_token',
-  refreshToken: 'spotify_refresh_token',
-  expiresAt: 'spotify_expires_at'
+  roster: 'walkup_local_roster_v1',
+  topInfoHidden: 'walkup_local_top_info_hidden_v1'
 };
 
 const state = {
   roster: [],
   selectedPlayerId: null,
-  accessToken: localStorage.getItem(STORAGE_KEYS.accessToken) || '',
-  refreshToken: localStorage.getItem(STORAGE_KEYS.refreshToken) || '',
-  expiresAt: Number(localStorage.getItem(STORAGE_KEYS.expiresAt) || 0),
+  librarySongs: [],
   pauseTimer: null,
-  activeDeviceId: '',
-  activeDeviceName: '',
-  devices: [],
+  currentAudio: null,
+  currentObjectUrl: null,
+  topInfoHidden: false,
 };
 
 const els = {
-  connectBtn: document.getElementById('connectBtn'),
-  disconnectBtn: document.getElementById('disconnectBtn'),
   stopBtn: document.getElementById('stopBtn'),
-  refreshDeviceBtn: document.getElementById('refreshDeviceBtn'),
-  transferBtn: document.getElementById('transferBtn'),
   addPlayerBtn: document.getElementById('addPlayerBtn'),
+  toggleSetupBtn: document.getElementById('toggleSetupBtn'),
+  setupHero: document.getElementById('setupHero'),
+  setupStatus: document.getElementById('setupStatus'),
+  setupInstructions: document.getElementById('setupInstructions'),
   rosterList: document.getElementById('rosterList'),
   selectedPlayer: document.getElementById('selectedPlayer'),
-  deviceSelect: document.getElementById('deviceSelect'),
-  searchInput: document.getElementById('searchInput'),
-  searchBtn: document.getElementById('searchBtn'),
-  searchResults: document.getElementById('searchResults'),
-  authStatus: document.getElementById('authStatus'),
-  authHint: document.getElementById('authHint'),
-  playerStatus: document.getElementById('playerStatus'),
-  playerHint: document.getElementById('playerHint'),
+  fileInput: document.getElementById('fileInput'),
+  librarySearch: document.getElementById('librarySearch'),
+  libraryResults: document.getElementById('libraryResults'),
+  libraryStatus: document.getElementById('libraryStatus'),
+  libraryHint: document.getElementById('libraryHint'),
   nowPlaying: document.getElementById('nowPlaying'),
   clipStatus: document.getElementById('clipStatus'),
   template: document.getElementById('playerCardTemplate')
 };
-
-function getRedirectUri() {
-  return `${window.location.origin}${window.location.pathname.replace(/index\.html$/, '')}`;
-}
-
-function setAuthStatus(text, hint = '') {
-  els.authStatus.textContent = text;
-  els.authHint.textContent = hint;
-}
-
-function setPlayerStatus(text, hint = '') {
-  els.playerStatus.textContent = text;
-  els.playerHint.textContent = hint;
-}
-
-function setClipStatus(title = '—', status = 'No clip playing') {
-  els.nowPlaying.textContent = title;
-  els.clipStatus.textContent = status;
-}
-
-function formatMsToTime(ms) {
-  const totalSeconds = Math.max(0, Math.round(ms / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
-}
-
-function adjustTimeValue(value, deltaSeconds) {
-  const current = parseTimeToMs(value);
-  return formatMsToTime(current + deltaSeconds * 1000);
-}
-
-function renderDeviceOptions() {
-  if (!els.deviceSelect) return;
-  els.deviceSelect.innerHTML = '';
-  if (!state.devices.length) {
-    const option = document.createElement('option');
-    option.value = '';
-    option.textContent = 'No Spotify device found yet';
-    els.deviceSelect.appendChild(option);
-    return;
-  }
-  state.devices.forEach((device) => {
-    const option = document.createElement('option');
-    option.value = device.id;
-    option.textContent = `${device.name} (${device.type})${device.is_active ? ' — active' : ''}${device.is_restricted ? ' — restricted' : ''}`;
-    if (device.id === state.activeDeviceId) option.selected = true;
-    els.deviceSelect.appendChild(option);
-  });
-}
-
-async function transferPlaybackToDevice(deviceId, play = false) {
-  if (!deviceId) throw new Error('Choose a Spotify device first.');
-  await spotifyFetch('https://api.spotify.com/v1/me/player', {
-    method: 'PUT',
-    body: JSON.stringify({ device_ids: [deviceId], play })
-  });
-  const device = state.devices.find((d) => d.id === deviceId);
-  state.activeDeviceId = deviceId;
-  state.activeDeviceName = device?.name || '';
-  renderDeviceOptions();
-  updateStopButtons();
-  setPlayerStatus(`Ready: ${state.activeDeviceName || 'Selected device'}`, 'This phone is selected for Spotify playback control.');
-}
-
-function updateStopButtons() {
-  const canStop = Boolean(state.accessToken && state.activeDeviceId);
-  if (els.stopBtn) els.stopBtn.disabled = !canStop;
-}
 
 function uuid() {
   return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -125,9 +42,11 @@ function createDefaultPlayer() {
     name: `Player ${state.roster.length + 1}`,
     songTitle: '',
     artist: '',
+    sourceType: '', // repo | upload
+    sourcePath: '',
+    sourceName: '',
     albumImage: '',
-    trackUri: '',
-    trackId: '',
+    uploadDataUrl: '',
     startTime: '0:00',
     endTime: '0:15'
   };
@@ -135,18 +54,6 @@ function createDefaultPlayer() {
 
 function saveRoster() {
   localStorage.setItem(STORAGE_KEYS.roster, JSON.stringify(state.roster));
-}
-
-function movePlayer(playerId, direction) {
-  const index = state.roster.findIndex((player) => player.id === playerId);
-  if (index < 0) return;
-  const newIndex = index + direction;
-  if (newIndex < 0 || newIndex >= state.roster.length) return;
-  const [player] = state.roster.splice(index, 1);
-  state.roster.splice(newIndex, 0, player);
-  saveRoster();
-  renderDeviceOptions();
-  render();
 }
 
 function loadRoster() {
@@ -161,6 +68,7 @@ function loadRoster() {
   state.roster = [createDefaultPlayer()];
   state.selectedPlayerId = state.roster[0].id;
   saveRoster();
+  state.topInfoHidden = localStorage.getItem(STORAGE_KEYS.topInfoHidden) === 'true';
 }
 
 function parseTimeToMs(value) {
@@ -174,564 +82,393 @@ function parseTimeToMs(value) {
   return 0;
 }
 
-function formatTrack(track) {
-  const artists = track.artists.map((artist) => artist.name).join(', ');
-  return {
-    songTitle: track.name,
-    artist: artists,
-    albumImage: track.album.images?.[2]?.url || track.album.images?.[1]?.url || track.album.images?.[0]?.url || '',
-    trackUri: track.uri,
-    trackId: track.id,
-  };
+function formatMsToTime(ms) {
+  const totalSeconds = Math.max(0, Math.round(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
-function setTokens({ access_token, refresh_token, expires_in }) {
-  state.accessToken = access_token;
-  if (refresh_token) state.refreshToken = refresh_token;
-  state.expiresAt = Date.now() + ((expires_in || 3600) - 30) * 1000;
-  localStorage.setItem(STORAGE_KEYS.accessToken, state.accessToken);
-  localStorage.setItem(STORAGE_KEYS.refreshToken, state.refreshToken);
-  localStorage.setItem(STORAGE_KEYS.expiresAt, String(state.expiresAt));
+function adjustTimeValue(value, deltaSeconds) {
+  return formatMsToTime(parseTimeToMs(value) + (deltaSeconds * 1000));
 }
 
-function clearTokens() {
-  state.accessToken = '';
-  state.refreshToken = '';
-  state.expiresAt = 0;
-  state.activeDeviceId = '';
-  state.activeDeviceName = '';
-  localStorage.removeItem(STORAGE_KEYS.accessToken);
-  localStorage.removeItem(STORAGE_KEYS.refreshToken);
-  localStorage.removeItem(STORAGE_KEYS.expiresAt);
+function setClipStatus(title = '—', status = 'No clip playing') {
+  els.nowPlaying.textContent = title;
+  els.clipStatus.textContent = status;
 }
 
-async function sha256(plain) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(plain);
-  return crypto.subtle.digest('SHA-256', data);
+function getSelectedPlayer() {
+  return state.roster.find((player) => player.id === state.selectedPlayerId) || state.roster[0] || null;
 }
 
-function base64UrlEncode(arrayBufferOrBytes) {
-  const bytes = arrayBufferOrBytes instanceof ArrayBuffer ? new Uint8Array(arrayBufferOrBytes) : arrayBufferOrBytes;
-  return btoa(String.fromCharCode(...bytes))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/g, '');
-}
-
-async function beginLogin() {
-  const verifier = base64UrlEncode(crypto.getRandomValues(new Uint8Array(64)));
-  localStorage.setItem(STORAGE_KEYS.codeVerifier, verifier);
-  const challenge = base64UrlEncode(await sha256(verifier));
-
-  const params = new URLSearchParams({
-    response_type: 'code',
-    client_id: CLIENT_ID,
-    scope: SCOPES.join(' '),
-    code_challenge_method: 'S256',
-    code_challenge: challenge,
-    redirect_uri: getRedirectUri(),
-  });
-
-  window.location.href = `https://accounts.spotify.com/authorize?${params.toString()}`;
-}
-
-async function exchangeCodeForToken(code) {
-  const verifier = localStorage.getItem(STORAGE_KEYS.codeVerifier);
-  if (!verifier) throw new Error('Missing PKCE verifier. Try connecting again.');
-
-  const body = new URLSearchParams({
-    client_id: CLIENT_ID,
-    grant_type: 'authorization_code',
-    code,
-    redirect_uri: getRedirectUri(),
-    code_verifier: verifier,
-  });
-
-  const response = await fetch('https://accounts.spotify.com/api/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || 'Spotify token exchange failed.');
+function getPlayableSource(player) {
+  if (!player) return null;
+  if (player.sourceType === 'repo' && player.sourcePath) {
+    return new URL(`./songs/${player.sourcePath}`, window.location.href).toString();
   }
-
-  const data = await response.json();
-  setTokens(data);
-  localStorage.removeItem(STORAGE_KEYS.codeVerifier);
-}
-
-async function refreshAccessToken() {
-  if (!state.refreshToken) return false;
-
-  const body = new URLSearchParams({
-    client_id: CLIENT_ID,
-    grant_type: 'refresh_token',
-    refresh_token: state.refreshToken,
-  });
-
-  const response = await fetch('https://accounts.spotify.com/api/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
-  });
-
-  if (!response.ok) {
-    clearTokens();
-    return false;
+  if (player.sourceType === 'upload' && player.uploadDataUrl) {
+    return player.uploadDataUrl;
   }
-
-  const data = await response.json();
-  setTokens({ ...data, refresh_token: data.refresh_token || state.refreshToken });
-  return true;
-}
-
-async function ensureAccessToken() {
-  if (state.accessToken && Date.now() < state.expiresAt) return state.accessToken;
-  const refreshed = await refreshAccessToken();
-  return refreshed ? state.accessToken : '';
-}
-
-async function spotifyFetch(url, options = {}) {
-  const token = await ensureAccessToken();
-  if (!token) throw new Error('Not connected to Spotify.');
-
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(options.headers || {})
-    }
-  });
-
-  if (response.status === 204) return null;
-  if (response.status === 401) {
-    const refreshed = await refreshAccessToken();
-    if (refreshed) return spotifyFetch(url, options);
-  }
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || `Spotify request failed: ${response.status}`);
-  }
-  const contentType = response.headers.get('content-type') || '';
-  if (contentType.includes('application/json')) return response.json();
   return null;
 }
 
-async function handleAuthCallback() {
-  const url = new URL(window.location.href);
-  const code = url.searchParams.get('code');
-  const error = url.searchParams.get('error');
+function stopPlayback() {
+  clearTimeout(state.pauseTimer);
+  state.pauseTimer = null;
+  if (state.currentAudio) {
+    state.currentAudio.pause();
+    state.currentAudio.currentTime = 0;
+  }
+  setClipStatus('—', 'No clip playing');
+}
 
-  if (error) {
-    setAuthStatus('Spotify denied access', error);
+async function playPlayer(playerId) {
+  const player = state.roster.find((item) => item.id === playerId);
+  if (!player) return;
+
+  const source = getPlayableSource(player);
+  if (!source) {
+    alert('Pick a repo song or upload an audio file for this player first.');
     return;
   }
 
-  if (!code) return;
+  stopPlayback();
 
-  setAuthStatus('Finishing Spotify login…', 'Exchanging the authorization code.');
-  try {
-    await exchangeCodeForToken(code);
-    url.searchParams.delete('code');
-    url.searchParams.delete('state');
-    url.searchParams.delete('error');
-    window.history.replaceState({}, '', getRedirectUri());
-  } catch (err) {
-    setAuthStatus('Connection failed', err.message);
-  }
-}
+  const startMs = parseTimeToMs(player.startTime);
+  let endMs = parseTimeToMs(player.endTime);
+  if (endMs <= startMs) endMs = startMs + 15000;
 
-async function fetchDevices() {
-  const data = await spotifyFetch('https://api.spotify.com/v1/me/player/devices');
-  return data?.devices || [];
-}
+  const audio = state.currentAudio || new Audio();
+  state.currentAudio = audio;
+  audio.src = source;
+  audio.preload = 'auto';
+  audio.currentTime = startMs / 1000;
 
-async function refreshActiveDevice() {
-  if (!state.accessToken) {
-    state.activeDeviceId = '';
-    state.activeDeviceName = '';
-    updateStopButtons();
-    return null;
-  }
+  setClipStatus(player.name || 'Player', `Loading ${player.songTitle || player.sourceName || 'song'}…`);
 
-  const devices = await fetchDevices();
-  state.devices = devices;
-  const usable = devices.filter((d) => !d.is_restricted);
-  const active = usable.find((d) => d.is_active) || usable.find((d) => /iphone|android|phone/i.test(`${d.type} ${d.name}`)) || usable[0] || null;
+  const seekAndPlay = async () => {
+    try {
+      audio.currentTime = startMs / 1000;
+    } catch {}
+    await audio.play();
+    setClipStatus(player.name || 'Player', `${player.songTitle || player.sourceName || 'Song'} • ${player.artist || 'Local audio'}`);
+    state.pauseTimer = window.setTimeout(() => {
+      stopPlayback();
+    }, Math.max(250, endMs - startMs));
+  };
 
-  if (!active) {
-    state.activeDeviceId = '';
-    state.activeDeviceName = '';
-    setPlayerStatus('No active Spotify device', 'Open the Spotify app on your phone first, start any song there, then tap Refresh Device.');
-    updateStopButtons();
-    return null;
-  }
-
-  state.activeDeviceId = active.id;
-  state.activeDeviceName = active.name;
-  renderDeviceOptions();
-  setPlayerStatus(`Ready: ${active.name}`, 'Phone mode: this page controls the Spotify app/device instead of playing audio in the browser.');
-  updateStopButtons();
-  return active;
-}
-
-async function stopPlayback() {
-  if (state.pauseTimer) {
-    clearTimeout(state.pauseTimer);
-    state.pauseTimer = null;
-  }
-
-  try {
-    if (!state.activeDeviceId) await refreshActiveDevice();
-    if (!state.activeDeviceId) {
-      setClipStatus('—', 'No Spotify device selected');
+  if (audio.readyState >= 1) {
+    try {
+      await seekAndPlay();
       return;
-    }
-
-    await spotifyFetch(`https://api.spotify.com/v1/me/player/pause?device_id=${encodeURIComponent(state.activeDeviceId)}`, { method: 'PUT' });
-    setClipStatus(els.nowPlaying.textContent || '—', 'Stopped');
-  } catch (err) {
-    setPlayerStatus('Stop failed', err.message);
+    } catch (error) {}
   }
+
+  audio.addEventListener('loadedmetadata', async function handleLoaded() {
+    audio.removeEventListener('loadedmetadata', handleLoaded);
+    try {
+      await seekAndPlay();
+    } catch (error) {
+      console.error(error);
+      alert('Playback was blocked. Try tapping the player button again.');
+      setClipStatus('—', 'Playback blocked');
+    }
+  }, { once: true });
+
+  audio.addEventListener('error', () => {
+    setClipStatus('—', 'Could not load audio file');
+  }, { once: true });
+
+  audio.load();
 }
 
-function disconnect() {
-  clearTokens();
-  if (state.pauseTimer) {
-    clearTimeout(state.pauseTimer);
-    state.pauseTimer = null;
-  }
-  setAuthStatus('Not connected', 'Click Connect Spotify to sign in again.');
-  setPlayerStatus('Not ready', 'Reconnect Spotify, then open the Spotify app on your phone and tap Refresh Device.');
-  setClipStatus();
-  updateStopButtons();
-  renderDeviceOptions();
+function updatePlayer(playerId, updates) {
+  const player = state.roster.find((item) => item.id === playerId);
+  if (!player) return;
+  Object.assign(player, updates);
+  saveRoster();
   render();
 }
 
-function updateSelectedPlayerOptions() {
-  const current = state.selectedPlayerId;
+function movePlayer(playerId, direction) {
+  const index = state.roster.findIndex((player) => player.id === playerId);
+  if (index < 0) return;
+  const nextIndex = index + direction;
+  if (nextIndex < 0 || nextIndex >= state.roster.length) return;
+  const [player] = state.roster.splice(index, 1);
+  state.roster.splice(nextIndex, 0, player);
+  saveRoster();
+  render();
+}
+
+function deletePlayer(playerId) {
+  const index = state.roster.findIndex((item) => item.id === playerId);
+  if (index < 0) return;
+  state.roster.splice(index, 1);
+  if (!state.roster.length) state.roster.push(createDefaultPlayer());
+  if (!state.roster.some((item) => item.id === state.selectedPlayerId)) {
+    state.selectedPlayerId = state.roster[0].id;
+  }
+  saveRoster();
+  render();
+}
+
+async function fileToDataUrl(file) {
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function assignUploadedSongToPlayer(playerId, file) {
+  if (!file) return;
+  const dataUrl = await fileToDataUrl(file);
+  const title = file.name.replace(/\.[^.]+$/, '');
+  updatePlayer(playerId, {
+    sourceType: 'upload',
+    sourcePath: '',
+    sourceName: file.name,
+    songTitle: title,
+    artist: 'Uploaded audio',
+    albumImage: '',
+    uploadDataUrl: dataUrl
+  });
+}
+
+async function handleTopUpload(event) {
+  const file = event.target.files?.[0];
+  const player = getSelectedPlayer();
+  if (!file || !player) return;
+  await assignUploadedSongToPlayer(player.id, file);
+  event.target.value = '';
+}
+
+function assignRepoSongToPlayer(playerId, song) {
+  updatePlayer(playerId, {
+    sourceType: 'repo',
+    sourcePath: song.file,
+    sourceName: song.file,
+    songTitle: song.title || song.file,
+    artist: song.artist || 'Repo song',
+    albumImage: song.image || '',
+    uploadDataUrl: ''
+  });
+}
+
+async function loadRepoSongs() {
+  try {
+    const response = await fetch('./songs/manifest.json', { cache: 'no-store' });
+    if (!response.ok) throw new Error('No manifest yet');
+    const data = await response.json();
+    const songs = Array.isArray(data) ? data : Array.isArray(data.songs) ? data.songs : [];
+    state.librarySongs = songs.filter((song) => song?.file);
+    if (state.librarySongs.length) {
+      els.libraryStatus.textContent = `${state.librarySongs.length} repo song${state.librarySongs.length === 1 ? '' : 's'} loaded`;
+      els.libraryHint.textContent = 'Tap “Choose” to assign one to the selected player.';
+    } else {
+      els.libraryStatus.textContent = 'Manifest found, but no songs listed';
+      els.libraryHint.textContent = 'Check songs/manifest.json and make sure each song has a file value.';
+    }
+  } catch {
+    state.librarySongs = [];
+    els.libraryStatus.textContent = 'No repo songs found yet';
+    els.libraryHint.textContent = 'That is okay — you can still upload audio files right inside the app.';
+  }
+  renderLibraryResults();
+}
+
+function renderSelectedPlayerOptions() {
   els.selectedPlayer.innerHTML = '';
   state.roster.forEach((player) => {
     const option = document.createElement('option');
     option.value = player.id;
     option.textContent = player.name || 'Unnamed player';
-    if (player.id === current) option.selected = true;
+    if (player.id === state.selectedPlayerId) option.selected = true;
     els.selectedPlayer.appendChild(option);
   });
+}
+
+function renderLibraryResults() {
+  const player = getSelectedPlayer();
+  const query = (els.librarySearch.value || '').trim().toLowerCase();
+  const songs = state.librarySongs.filter((song) => {
+    if (!query) return true;
+    return `${song.title || ''} ${song.artist || ''} ${song.file || ''}`.toLowerCase().includes(query);
+  });
+
+  els.libraryResults.innerHTML = '';
+  if (!songs.length) {
+    els.libraryResults.className = 'search-results empty-state';
+    els.libraryResults.textContent = state.librarySongs.length ? 'No songs match that search.' : 'No repo songs loaded yet. Add songs/manifest.json or upload files inside the app.';
+    return;
+  }
+
+  els.libraryResults.className = 'search-results';
+  songs.forEach((song) => {
+    const row = document.createElement('div');
+    row.className = 'song-result';
+
+    const meta = document.createElement('div');
+    meta.className = 'song-result-meta';
+    const title = document.createElement('strong');
+    title.textContent = song.title || song.file;
+    const artist = document.createElement('span');
+    artist.textContent = song.artist || song.file;
+    meta.append(title, artist);
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = player ? 'Choose' : 'Select a player';
+    btn.disabled = !player;
+    btn.addEventListener('click', () => {
+      if (!player) return;
+      assignRepoSongToPlayer(player.id, song);
+    });
+
+    row.append(meta, btn);
+    els.libraryResults.appendChild(row);
+  });
+}
+
+function applyTopInfoVisibility() {
+  const shouldHide = !!state.topInfoHidden;
+  [els.setupHero, els.setupStatus, els.setupInstructions].forEach((el) => {
+    if (el) el.classList.toggle('is-hidden', shouldHide);
+  });
+  if (els.toggleSetupBtn) {
+    els.toggleSetupBtn.textContent = shouldHide ? 'Show top info' : 'Hide top info';
+  }
 }
 
 function renderRoster() {
   els.rosterList.innerHTML = '';
 
-  for (const player of state.roster) {
+  state.roster.forEach((player, index) => {
     const fragment = els.template.content.cloneNode(true);
     const card = fragment.querySelector('.player-card');
     const nameInput = fragment.querySelector('.player-name-input');
     const songMeta = fragment.querySelector('.song-meta');
     const startInput = fragment.querySelector('.start-input');
     const endInput = fragment.querySelector('.end-input');
-    const moveUpBtn = fragment.querySelector('.move-up-btn');
-    const moveDownBtn = fragment.querySelector('.move-down-btn');
     const playBtn = fragment.querySelector('.play-btn');
-    const startMinusBtn = fragment.querySelector('.start-minus-btn');
-    const startPlusBtn = fragment.querySelector('.start-plus-btn');
-    const endMinusBtn = fragment.querySelector('.end-minus-btn');
-    const endPlusBtn = fragment.querySelector('.end-plus-btn');
-    const stopCardBtn = fragment.querySelector('.stop-card-btn');
+    const stopBtn = fragment.querySelector('.stop-card-btn');
     const deleteBtn = fragment.querySelector('.delete-btn');
+    const upBtn = fragment.querySelector('.move-up-btn');
+    const downBtn = fragment.querySelector('.move-down-btn');
+    const chooseFromLibraryBtn = fragment.querySelector('.choose-from-library-btn');
+    const uploadForPlayerInput = fragment.querySelector('.upload-for-player-input');
 
     nameInput.value = player.name || '';
     startInput.value = player.startTime || '0:00';
     endInput.value = player.endTime || '0:15';
 
-    if (player.songTitle) {
+    if (player.songTitle || player.sourceName) {
       songMeta.classList.remove('empty-song');
-      songMeta.textContent = `${player.songTitle} — ${player.artist}`;
-    }
-
-    const index = state.roster.findIndex((p) => p.id === player.id);
-    moveUpBtn.disabled = index === 0;
-    moveDownBtn.disabled = index === state.roster.length - 1;
-
-    if (player.id === state.selectedPlayerId) {
-      card.style.borderColor = '#8dc9a8';
-      card.style.boxShadow = '0 0 0 3px rgba(15, 157, 88, 0.08)';
+      if (player.albumImage) {
+        songMeta.innerHTML = `
+          <div class="song-meta-content">
+            <img src="${player.albumImage}" alt="${player.songTitle || 'Song art'}" />
+            <div>
+              <strong>${escapeHtml(player.songTitle || player.sourceName)}</strong>
+              <span>${escapeHtml(player.artist || (player.sourceType === 'repo' ? 'Repo song' : 'Uploaded audio'))}</span>
+            </div>
+          </div>
+        `;
+      } else {
+        songMeta.innerHTML = `
+          <strong>${escapeHtml(player.songTitle || player.sourceName)}</strong>
+          <span>${escapeHtml(player.artist || (player.sourceType === 'repo' ? 'Repo song' : 'Uploaded audio'))}</span>
+        `;
+      }
     }
 
     nameInput.addEventListener('input', (event) => {
       player.name = event.target.value;
-      updateSelectedPlayerOptions();
       saveRoster();
+      renderSelectedPlayerOptions();
     });
 
-    startInput.addEventListener('input', (event) => {
-      player.startTime = event.target.value;
-      saveRoster();
+    startInput.addEventListener('change', (event) => updatePlayer(player.id, { startTime: event.target.value || '0:00' }));
+    endInput.addEventListener('change', (event) => updatePlayer(player.id, { endTime: event.target.value || '0:15' }));
+    playBtn.addEventListener('click', () => playPlayer(player.id));
+    stopBtn.addEventListener('click', stopPlayback);
+    deleteBtn.addEventListener('click', () => deletePlayer(player.id));
+    upBtn.addEventListener('click', () => movePlayer(player.id, -1));
+    downBtn.addEventListener('click', () => movePlayer(player.id, 1));
+    chooseFromLibraryBtn.addEventListener('click', () => {
+      state.selectedPlayerId = player.id;
+      renderSelectedPlayerOptions();
+      renderLibraryResults();
+      els.librarySearch.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      els.librarySearch.focus();
+    });
+    uploadForPlayerInput.addEventListener('change', async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      await assignUploadedSongToPlayer(player.id, file);
+      event.target.value = '';
     });
 
-    endInput.addEventListener('input', (event) => {
-      player.endTime = event.target.value;
-      saveRoster();
-    });
-
-    startMinusBtn.addEventListener('click', (event) => {
-      event.stopPropagation();
-      player.startTime = adjustTimeValue(player.startTime || '0:00', -5);
-      if (parseTimeToMs(player.endTime) < parseTimeToMs(player.startTime)) player.endTime = player.startTime;
-      saveRoster();
-      render();
-    });
-    startPlusBtn.addEventListener('click', (event) => {
-      event.stopPropagation();
-      player.startTime = adjustTimeValue(player.startTime || '0:00', 5);
-      if (parseTimeToMs(player.endTime) < parseTimeToMs(player.startTime)) player.endTime = adjustTimeValue(player.startTime, 5);
-      saveRoster();
-      render();
-    });
-    endMinusBtn.addEventListener('click', (event) => {
-      event.stopPropagation();
-      player.endTime = adjustTimeValue(player.endTime || player.startTime || '0:15', -5);
-      if (parseTimeToMs(player.endTime) < parseTimeToMs(player.startTime)) player.endTime = player.startTime;
-      saveRoster();
-      render();
-    });
-    endPlusBtn.addEventListener('click', (event) => {
-      event.stopPropagation();
-      player.endTime = adjustTimeValue(player.endTime || player.startTime || '0:15', 5);
-      saveRoster();
-      render();
-    });
+    if (index === 0) upBtn.disabled = true;
+    if (index === state.roster.length - 1) downBtn.disabled = true;
 
     card.addEventListener('click', (event) => {
-      if (event.target.closest('button') || event.target.closest('input')) return;
+      if (event.target.closest('button, input, label')) return;
       state.selectedPlayerId = player.id;
-      render();
-    });
-
-    moveUpBtn.addEventListener('click', (event) => {
-      event.stopPropagation();
-      movePlayer(player.id, -1);
-    });
-
-    moveDownBtn.addEventListener('click', (event) => {
-      event.stopPropagation();
-      movePlayer(player.id, 1);
-    });
-
-    playBtn.addEventListener('click', async (event) => {
-      event.stopPropagation();
-      await playPlayerClip(player.id);
-    });
-
-    stopCardBtn.addEventListener('click', async (event) => {
-      event.stopPropagation();
-      await stopPlayback();
-    });
-
-    deleteBtn.addEventListener('click', (event) => {
-      event.stopPropagation();
-      if (state.roster.length === 1) {
-        state.roster[0] = createDefaultPlayer();
-        state.selectedPlayerId = state.roster[0].id;
-      } else {
-        state.roster = state.roster.filter((p) => p.id !== player.id);
-        if (state.selectedPlayerId === player.id) {
-          state.selectedPlayerId = state.roster[0]?.id || null;
-        }
-      }
-      saveRoster();
-      render();
+      renderSelectedPlayerOptions();
+      renderLibraryResults();
     });
 
     els.rosterList.appendChild(fragment);
-  }
+  });
 }
 
 function render() {
-  updateSelectedPlayerOptions();
+  applyTopInfoVisibility();
+  renderSelectedPlayerOptions();
   renderRoster();
-  const connected = Boolean(state.accessToken);
-  els.connectBtn.hidden = connected;
-  els.disconnectBtn.hidden = !connected;
-  if (connected) {
-    setAuthStatus('Connected', `Redirect URI in Spotify should be ${getRedirectUri()}`);
-  }
-  updateStopButtons();
+  renderLibraryResults();
 }
 
-function addPlayer() {
-  const player = createDefaultPlayer();
-  state.roster.push(player);
-  state.selectedPlayerId = player.id;
-  saveRoster();
-  renderDeviceOptions();
-  render();
-}
-
-async function searchTracks() {
-  const query = els.searchInput.value.trim();
-  if (!query) return;
-  if (!state.selectedPlayerId) {
-    els.searchResults.textContent = 'Add or select a player first.';
-    return;
-  }
-
-  els.searchResults.textContent = 'Searching…';
-
-  try {
-    const data = await spotifyFetch(`https://api.spotify.com/v1/search?${new URLSearchParams({ q: query, type: 'track', limit: '10' }).toString()}`);
-    const items = data?.tracks?.items || [];
-    if (!items.length) {
-      els.searchResults.textContent = 'No songs found.';
-      return;
-    }
-
-    els.searchResults.innerHTML = '';
-    items.forEach((track) => {
-      const div = document.createElement('div');
-      div.className = 'search-result';
-      const artists = track.artists.map((a) => a.name).join(', ');
-      const art = track.album.images?.[2]?.url || track.album.images?.[1]?.url || '';
-      div.innerHTML = `
-        <div class="search-result-top">
-          <div>
-            <strong>${track.name}</strong>
-            <div>${artists}</div>
-            <small>${track.album.name}</small>
-          </div>
-          ${art ? `<img src="${art}" alt="Album art" width="56" height="56" style="border-radius:12px; object-fit:cover;">` : ''}
-        </div>
-      `;
-      const assignBtn = document.createElement('button');
-      assignBtn.textContent = 'Assign to player';
-      assignBtn.className = 'secondary-btn';
-      assignBtn.addEventListener('click', () => {
-        const player = state.roster.find((p) => p.id === state.selectedPlayerId);
-        if (!player) return;
-        Object.assign(player, formatTrack(track));
-        saveRoster();
-        render();
-      });
-      div.appendChild(assignBtn);
-      els.searchResults.appendChild(div);
-    });
-  } catch (err) {
-    els.searchResults.textContent = err.message;
-  }
-}
-
-async function playPlayerClip(playerId) {
-  const playerData = state.roster.find((p) => p.id === playerId);
-  if (!playerData) return;
-  if (!playerData.trackUri) {
-    setClipStatus(playerData.name || 'Player', 'Select a song first.');
-    return;
-  }
-  if (!state.accessToken) {
-    setAuthStatus('Not connected', 'Connect Spotify before playing clips.');
-    return;
-  }
-
-  const startMs = parseTimeToMs(playerData.startTime);
-  const endMs = parseTimeToMs(playerData.endTime);
-  const durationMs = Math.max(1000, endMs - startMs || 15000);
-
-  try {
-    let device = state.devices.find((d) => d.id === els.deviceSelect?.value && !d.is_restricted) || null;
-    if (!device) device = await refreshActiveDevice();
-    if (!device) return;
-
-    if (!device.is_active) {
-      await transferPlaybackToDevice(device.id, false);
-      await new Promise((resolve) => setTimeout(resolve, 600));
-    }
-
-    await spotifyFetch(`https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(device.id)}`, {
-      method: 'PUT',
-      body: JSON.stringify({ uris: [playerData.trackUri], position_ms: startMs })
-    });
-
-    if (state.pauseTimer) clearTimeout(state.pauseTimer);
-    state.pauseTimer = setTimeout(async () => {
-      try {
-        await spotifyFetch(`https://api.spotify.com/v1/me/player/pause?device_id=${encodeURIComponent(device.id)}`, { method: 'PUT' });
-        setClipStatus(`${playerData.songTitle} — ${playerData.artist}`, `Stopped at ${playerData.endTime || 'clip end'}`);
-      } catch {}
-      state.pauseTimer = null;
-    }, durationMs);
-
-    setClipStatus(`${playerData.songTitle} — ${playerData.artist}`, `${playerData.name} clip is playing on ${device.name}`);
-  } catch (err) {
-    const message = err.message || 'Playback failed.';
-    if (/NO_ACTIVE_DEVICE|device/i.test(message)) {
-      setPlayerStatus('Open Spotify first', 'Open the Spotify app on your phone, play any song there once, then tap Refresh Device and try again.');
-    } else {
-      setPlayerStatus('Playback failed', message);
-    }
-  }
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function bindEvents() {
-  els.connectBtn.addEventListener('click', beginLogin);
-  els.disconnectBtn.addEventListener('click', disconnect);
   els.stopBtn.addEventListener('click', stopPlayback);
-  els.refreshDeviceBtn?.addEventListener('click', async () => {
-    try {
-      await refreshActiveDevice();
-    } catch (err) {
-      setPlayerStatus('Device refresh failed', err.message);
-    }
+  els.addPlayerBtn.addEventListener('click', () => {
+    const player = createDefaultPlayer();
+    state.roster.push(player);
+    state.selectedPlayerId = player.id;
+    saveRoster();
+    render();
   });
-  els.transferBtn?.addEventListener('click', async () => {
-    try {
-      const deviceId = els.deviceSelect?.value;
-      await transferPlaybackToDevice(deviceId, false);
-    } catch (err) {
-      setPlayerStatus('Could not select device', err.message);
-    }
-  });
-  els.addPlayerBtn.addEventListener('click', addPlayer);
-  els.searchBtn.addEventListener('click', searchTracks);
-  els.searchInput.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') searchTracks();
+  els.toggleSetupBtn.addEventListener('click', () => {
+    state.topInfoHidden = !state.topInfoHidden;
+    localStorage.setItem(STORAGE_KEYS.topInfoHidden, String(state.topInfoHidden));
+    applyTopInfoVisibility();
   });
   els.selectedPlayer.addEventListener('change', (event) => {
     state.selectedPlayerId = event.target.value;
-    render();
+    renderLibraryResults();
   });
-  els.deviceSelect?.addEventListener('change', (event) => {
-    state.activeDeviceId = event.target.value;
-    const device = state.devices.find((d) => d.id === state.activeDeviceId);
-    state.activeDeviceName = device?.name || '';
-    updateStopButtons();
-  });
+  els.fileInput.addEventListener('change', handleTopUpload);
+  els.librarySearch.addEventListener('input', renderLibraryResults);
 }
 
-async function boot() {
+async function init() {
   loadRoster();
   bindEvents();
-  await handleAuthCallback();
-
-  if (state.accessToken) {
-    setAuthStatus('Connected', `Redirect URI in Spotify should be ${getRedirectUri()}`);
-    try {
-      await refreshActiveDevice();
-    } catch {
-      setPlayerStatus('Open Spotify first', 'Open the Spotify app on your phone, make it the active device, then tap Refresh Device.');
-    }
-  } else {
-    setAuthStatus('Not connected', `Add ${getRedirectUri()} as a redirect URI in your Spotify app.`);
-    setPlayerStatus('Waiting for Spotify app', 'Phone mode controls the real Spotify app on your phone, not the browser audio player.');
-  }
-
-  renderDeviceOptions();
   render();
+  await loadRepoSongs();
 }
 
-boot();
+init();
