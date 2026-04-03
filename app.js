@@ -136,32 +136,55 @@ async function playPlayer(playerId) {
 
   setClipStatus(player.name || 'Player', `Loading ${player.songTitle || player.sourceName || 'song'}…`);
 
-  const finishStart = async () => {
+  const startClip = async () => {
     try {
       audio.currentTime = startMs / 1000;
     } catch {}
 
-    try {
-      if (audio.paused) {
-        await audio.play();
-      }
+    setClipStatus(
+      player.name || 'Player',
+      `${player.songTitle || player.sourceName || 'Song'} • ${player.artist || 'Local audio'}`
+    );
 
-      setClipStatus(
-        player.name || 'Player',
-        `${player.songTitle || player.sourceName || 'Song'} • ${player.artist || 'Local audio'}`
-      );
-
-      clearTimeout(state.pauseTimer);
-      state.pauseTimer = window.setTimeout(() => {
-        stopPlayback();
-      }, Math.max(250, endMs - startMs));
-    } catch (error) {
-      console.error(error);
-      alert('Playback was blocked on this phone. Tap the same player again.');
-      setClipStatus('—', 'Playback blocked');
-    }
+    clearTimeout(state.pauseTimer);
+    state.pauseTimer = window.setTimeout(() => {
+      stopPlayback();
+    }, Math.max(250, endMs - startMs));
   };
 
+  audio.addEventListener(
+    'error',
+    () => {
+      console.error('Audio failed to load:', source);
+      setClipStatus('—', 'Could not load audio file');
+      alert('Could not load audio file.');
+    },
+    { once: true }
+  );
+
+  try {
+    audio.load();
+
+    // First play must happen directly from the tap.
+    await audio.play();
+
+    if (audio.readyState >= 1) {
+      await startClip();
+    } else {
+      audio.addEventListener(
+        'loadedmetadata',
+        async () => {
+          await startClip();
+        },
+        { once: true }
+      );
+    }
+  } catch (error) {
+    console.error(error);
+    alert('Playback was blocked on this phone. Tap the player again.');
+    setClipStatus('—', 'Playback blocked');
+  }
+}
   audio.addEventListener(
     'error',
     () => {
