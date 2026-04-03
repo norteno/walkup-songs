@@ -1,3 +1,5 @@
 {
-  "songs": []
+  "songs": [
+    { "title": "COOK", "artist": "Sofi Tukker", "file": "COOK.mp3" },
+  ]
 }
