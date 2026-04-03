@@ -1,6 +1,6 @@
 {
   "songs": [
-    { "title": "COOK", "artist": "Sofi Tukker", "file": "songs/cook.mp3" },
-    { "title": "All I Do Is Win", "artist": "DJ Khaled", "file": "songs/all-i-do-is-win.mp3" }
+    { "title": "COOK", "artist": "Sofi Tukker", "file": "songs/Cook.mp3" },
+    { "title": "All I Do Is Win", "artist": "DJ Khaled", "file": "songs/All I Do Is Win.mp3" }
   ]
 }

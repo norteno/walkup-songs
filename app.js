@@ -31,9 +31,7 @@ const els = {
 };
 
 function uuid() {
-  return crypto.randomUUID
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 function createDefaultPlayer() {
@@ -57,7 +55,6 @@ function saveRoster() {
 
 function loadRoster() {
   state.topInfoHidden = localStorage.getItem(STORAGE_KEYS.topInfoHidden) === 'true';
-
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEYS.roster) || '[]');
     if (Array.isArray(saved) && saved.length) {
@@ -68,7 +65,6 @@ function loadRoster() {
   } catch (error) {
     console.error('Could not load saved roster:', error);
   }
-
   state.roster = [createDefaultPlayer()];
   state.selectedPlayerId = state.roster[0].id;
   saveRoster();
@@ -76,21 +72,12 @@ function loadRoster() {
 
 function parseTimeToMs(value) {
   if (!value) return 0;
-
   const trimmed = String(value).trim();
   if (/^\d+$/.test(trimmed)) return Number(trimmed) * 1000;
-
   const parts = trimmed.split(':').map(Number);
   if (parts.some(Number.isNaN)) return 0;
-
-  if (parts.length === 2) {
-    return ((parts[0] * 60) + parts[1]) * 1000;
-  }
-
-  if (parts.length === 3) {
-    return ((parts[0] * 3600) + (parts[1] * 60) + parts[2]) * 1000;
-  }
-
+  if (parts.length === 2) return ((parts[0] * 60) + parts[1]) * 1000;
+  if (parts.length === 3) return ((parts[0] * 3600) + (parts[1] * 60) + parts[2]) * 1000;
   return 0;
 }
 
@@ -105,21 +92,15 @@ function getSelectedPlayer() {
 
 function getPlayableSource(player) {
   if (!player || !player.sourcePath) return null;
-
   const rawPath = String(player.sourcePath).trim();
   if (!rawPath) return null;
-
-  const normalizedPath = rawPath.startsWith('songs/')
-    ? rawPath
-    : `songs/${rawPath}`;
-
+  const normalizedPath = rawPath.startsWith('songs/') ? rawPath : `songs/${rawPath}`;
   return new URL(`./${normalizedPath}`, window.location.href).toString();
 }
 
 function stopPlayback() {
   clearTimeout(state.pauseTimer);
   state.pauseTimer = null;
-
   if (state.currentAudio) {
     try {
       state.currentAudio.pause();
@@ -128,7 +109,6 @@ function stopPlayback() {
       console.error('Could not stop audio:', error);
     }
   }
-
   setClipStatus('—', 'No clip playing');
 }
 
@@ -156,10 +136,7 @@ async function playPlayer(playerId) {
   audio.preload = 'auto';
   audio.playsInline = true;
 
-  setClipStatus(
-    player.name || 'Player',
-    `Loading ${player.songTitle || player.sourceName || 'song'}…`
-  );
+  setClipStatus(player.name || 'Player', `Loading ${player.songTitle || player.sourceName || 'song'}…`);
 
   const beginClipWindow = async () => {
     try {
@@ -190,31 +167,21 @@ async function playPlayer(playerId) {
     }, Math.max(250, endMs - startMs));
   };
 
-  audio.addEventListener(
-    'error',
-    () => {
-      console.error('Audio failed to load:', source);
-      setClipStatus('—', 'Could not load audio file');
-      alert('Could not load audio file.');
-    },
-    { once: true }
-  );
+  audio.addEventListener('error', () => {
+    console.error('Audio failed to load:', source);
+    setClipStatus('—', 'Could not load audio file');
+    alert(`Could not load audio file.\n\nTried: ${source}`);
+  }, { once: true });
 
   try {
     audio.load();
-
     await audio.play();
-
     if (audio.readyState >= 1) {
       await beginClipWindow();
     } else {
-      audio.addEventListener(
-        'loadedmetadata',
-        () => {
-          beginClipWindow();
-        },
-        { once: true }
-      );
+      audio.addEventListener('loadedmetadata', () => {
+        beginClipWindow();
+      }, { once: true });
     }
   } catch (error) {
     console.error('Playback failed:', error);
@@ -226,7 +193,6 @@ async function playPlayer(playerId) {
 function updatePlayer(playerId, updates) {
   const player = state.roster.find((item) => item.id === playerId);
   if (!player) return;
-
   Object.assign(player, updates);
   saveRoster();
   render();
@@ -235,13 +201,10 @@ function updatePlayer(playerId, updates) {
 function movePlayer(playerId, direction) {
   const index = state.roster.findIndex((player) => player.id === playerId);
   if (index < 0) return;
-
   const nextIndex = index + direction;
   if (nextIndex < 0 || nextIndex >= state.roster.length) return;
-
   const [player] = state.roster.splice(index, 1);
   state.roster.splice(nextIndex, 0, player);
-
   saveRoster();
   render();
 }
@@ -249,17 +212,11 @@ function movePlayer(playerId, direction) {
 function deletePlayer(playerId) {
   const index = state.roster.findIndex((item) => item.id === playerId);
   if (index < 0) return;
-
   state.roster.splice(index, 1);
-
-  if (!state.roster.length) {
-    state.roster.push(createDefaultPlayer());
-  }
-
+  if (!state.roster.length) state.roster.push(createDefaultPlayer());
   if (!state.roster.some((item) => item.id === state.selectedPlayerId)) {
     state.selectedPlayerId = state.roster[0].id;
   }
-
   saveRoster();
   render();
 }
@@ -276,112 +233,70 @@ function assignRepoSongToPlayer(playerId, song) {
 }
 
 async function loadRepoSongs() {
-  if (els.libraryStatus) {
-    els.libraryStatus.textContent = 'Checking for repo songs…';
-  }
-  if (els.libraryHint) {
-    els.libraryHint.textContent = 'Looking for songs/manifest.json...';
-  }
+  if (els.libraryStatus) els.libraryStatus.textContent = 'Checking for repo songs…';
+  if (els.libraryHint) els.libraryHint.textContent = 'Looking for songs/manifest.json...';
 
   try {
     const manifestUrl = `./songs/manifest.json?v=${Date.now()}`;
     const response = await fetch(manifestUrl, { cache: 'no-store' });
-
-    if (!response.ok) {
-      throw new Error(`Manifest request failed: ${response.status}`);
-    }
-
+    if (!response.ok) throw new Error(`Manifest request failed: ${response.status}`);
     const data = await response.json();
     const songs = Array.isArray(data) ? data : Array.isArray(data.songs) ? data.songs : [];
-
     state.librarySongs = songs.filter((song) => song && song.file);
-
     if (state.librarySongs.length) {
-      if (els.libraryStatus) {
-        els.libraryStatus.textContent = `${state.librarySongs.length} repo song${state.librarySongs.length === 1 ? '' : 's'} loaded`;
-      }
-      if (els.libraryHint) {
-        els.libraryHint.textContent = 'Tap “Choose” to assign one to the selected player.';
-      }
+      if (els.libraryStatus) els.libraryStatus.textContent = `${state.librarySongs.length} repo song${state.librarySongs.length === 1 ? '' : 's'} loaded`;
+      if (els.libraryHint) els.libraryHint.textContent = 'Tap “Choose” to assign one to the selected player.';
     } else {
-      if (els.libraryStatus) {
-        els.libraryStatus.textContent = 'Manifest found, but no songs listed';
-      }
-      if (els.libraryHint) {
-        els.libraryHint.textContent = 'Check songs/manifest.json and make sure each song has a file value.';
-      }
+      if (els.libraryStatus) els.libraryStatus.textContent = 'Manifest found, but no songs listed';
+      if (els.libraryHint) els.libraryHint.textContent = 'Check songs/manifest.json and make sure each song has a file value.';
     }
   } catch (error) {
     console.error('Could not load repo songs:', error);
     state.librarySongs = [];
-
-    if (els.libraryStatus) {
-      els.libraryStatus.textContent = 'No repo songs found yet';
-    }
-    if (els.libraryHint) {
-      els.libraryHint.textContent = 'Add a songs folder and valid manifest.json to your GitHub repo, then refresh the page.';
-    }
+    if (els.libraryStatus) els.libraryStatus.textContent = 'No repo songs found yet';
+    if (els.libraryHint) els.libraryHint.textContent = 'Add a songs folder and valid manifest.json to your GitHub repo, then refresh the page.';
   }
-
   renderLibraryResults();
 }
 
 function renderSelectedPlayerOptions() {
   if (!els.selectedPlayer) return;
-
   els.selectedPlayer.innerHTML = '';
-
   state.roster.forEach((player) => {
     const option = document.createElement('option');
     option.value = player.id;
     option.textContent = player.name || 'Unnamed player';
-
-    if (player.id === state.selectedPlayerId) {
-      option.selected = true;
-    }
-
+    if (player.id === state.selectedPlayerId) option.selected = true;
     els.selectedPlayer.appendChild(option);
   });
 }
 
 function renderLibraryResults() {
   if (!els.libraryResults) return;
-
   const player = getSelectedPlayer();
   const query = (els.librarySearch?.value || '').trim().toLowerCase();
-
   const songs = state.librarySongs.filter((song) => {
     if (!query) return true;
-    return `${song.title || ''} ${song.artist || ''} ${song.file || ''}`
-      .toLowerCase()
-      .includes(query);
+    return `${song.title || ''} ${song.artist || ''} ${song.file || ''}`.toLowerCase().includes(query);
   });
 
   els.libraryResults.innerHTML = '';
-
   if (!songs.length) {
     els.libraryResults.className = 'search-results empty-state';
-    els.libraryResults.textContent = state.librarySongs.length
-      ? 'No songs match that search.'
-      : 'No repo songs loaded yet. Add songs/manifest.json in your GitHub repo.';
+    els.libraryResults.textContent = state.librarySongs.length ? 'No songs match that search.' : 'No repo songs loaded yet. Add songs/manifest.json in your GitHub repo.';
     return;
   }
 
   els.libraryResults.className = 'search-results';
-
   songs.forEach((song) => {
     const row = document.createElement('div');
     row.className = 'song-result';
-
     const meta = document.createElement('div');
     meta.className = 'song-result-meta';
-
     const title = document.createElement('strong');
     title.textContent = song.title || song.file;
-
     const artist = document.createElement('span');
     artist.textContent = song.artist || song.file;
-
     meta.append(title, artist);
 
     const btn = document.createElement('button');
@@ -400,21 +315,25 @@ function renderLibraryResults() {
 
 function applyTopInfoVisibility() {
   const shouldHide = !!state.topInfoHidden;
-
   [els.setupHero, els.setupStatus, els.setupInstructions].forEach((el) => {
-    if (el) {
-      el.classList.toggle('is-hidden', shouldHide);
-    }
+    if (el) el.classList.toggle('is-hidden', shouldHide);
   });
-
   if (els.toggleSetupBtn) {
     els.toggleSetupBtn.textContent = shouldHide ? 'Show top info' : 'Hide top info';
   }
 }
 
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function renderRoster() {
   if (!els.rosterList || !els.template) return;
-
   els.rosterList.innerHTML = '';
 
   state.roster.forEach((player, index) => {
@@ -437,7 +356,6 @@ function renderRoster() {
 
     if (songMeta && (player.songTitle || player.sourceName)) {
       songMeta.classList.remove('empty-song');
-
       if (player.albumImage) {
         songMeta.innerHTML = `
           <div class="song-meta-content">
@@ -461,21 +379,13 @@ function renderRoster() {
       saveRoster();
       renderSelectedPlayerOptions();
     });
-
-    startInput?.addEventListener('change', (event) => {
-      updatePlayer(player.id, { startTime: event.target.value || '0:00' });
-    });
-
-    endInput?.addEventListener('change', (event) => {
-      updatePlayer(player.id, { endTime: event.target.value || '0:15' });
-    });
-
+    startInput?.addEventListener('change', (event) => updatePlayer(player.id, { startTime: event.target.value || '0:00' }));
+    endInput?.addEventListener('change', (event) => updatePlayer(player.id, { endTime: event.target.value || '0:15' }));
     playBtn?.addEventListener('click', () => playPlayer(player.id));
     stopBtn?.addEventListener('click', stopPlayback);
     deleteBtn?.addEventListener('click', () => deletePlayer(player.id));
     upBtn?.addEventListener('click', () => movePlayer(player.id, -1));
     downBtn?.addEventListener('click', () => movePlayer(player.id, 1));
-
     chooseFromLibraryBtn?.addEventListener('click', () => {
       state.selectedPlayerId = player.id;
       renderSelectedPlayerOptions();
@@ -505,18 +415,8 @@ function render() {
   renderLibraryResults();
 }
 
-function escapeHtml(value) {
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
 function bindEvents() {
   els.stopBtn?.addEventListener('click', stopPlayback);
-
   els.addPlayerBtn?.addEventListener('click', () => {
     const player = createDefaultPlayer();
     state.roster.push(player);
@@ -524,18 +424,15 @@ function bindEvents() {
     saveRoster();
     render();
   });
-
   els.toggleSetupBtn?.addEventListener('click', () => {
     state.topInfoHidden = !state.topInfoHidden;
     localStorage.setItem(STORAGE_KEYS.topInfoHidden, String(state.topInfoHidden));
     applyTopInfoVisibility();
   });
-
   els.selectedPlayer?.addEventListener('change', (event) => {
     state.selectedPlayerId = event.target.value;
     renderLibraryResults();
   });
-
   els.librarySearch?.addEventListener('input', renderLibraryResults);
 }
 

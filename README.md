@@ -1,23 +1,38 @@
-# Walk-Up Songs (GitHub repo songs only)
+# Walk-Up Songs (GitHub-hosted local audio)
 
-This version uses only audio files stored in your GitHub Pages repo.
+This version loads songs only from your GitHub Pages repo.
 
-## Setup
+## Repo structure
 
-1. Put your audio files in `songs/`
-2. List them in `songs/manifest.json`
-3. Open the app on GitHub Pages
-4. Search and assign songs to players
+```
+index.html
+styles.css
+app.js
+songs/
+  manifest.json
+  Cook.mp3
+  All I Do Is Win.mp3
+```
 
-## Example manifest
+## Important rule
+
+Use the exact GitHub filename in `manifest.json`, including capitalization.
+
+Example:
 
 ```json
 {
   "songs": [
-    { "title": "Thunder", "artist": "Team Mix", "file": "thunder.mp3" },
-    { "title": "Fireball", "artist": "Pitbull", "file": "fireball.mp3" }
+    { "title": "COOK", "artist": "Sofi Tukker", "file": "songs/Cook.mp3" },
+    { "title": "All I Do Is Win", "artist": "DJ Khaled", "file": "songs/All I Do Is Win.mp3" }
   ]
 }
 ```
 
-Use only the filename in `file`, not `songs/thunder.mp3`.
+This app accepts either `songs/Filename.mp3` or just `Filename.mp3`, but using full `songs/...` paths in the manifest is the safest choice.
+
+## If mobile says the file cannot be loaded
+
+1. Open the MP3 directly in the browser.
+2. Confirm the path and capitalization match exactly.
+3. Hard refresh the app after updating GitHub Pages.
