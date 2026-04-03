@@ -1,6 +1,5 @@
 const CLIENT_ID = '8d83e767e2944f7f9a392318c2f46a2b';
 const SCOPES = [
-  'streaming',
   'user-modify-playback-state',
   'user-read-playback-state'
 ];
@@ -16,21 +15,19 @@ const STORAGE_KEYS = {
 const state = {
   roster: [],
   selectedPlayerId: null,
-  player: null,
-  playerDeviceId: null,
   accessToken: localStorage.getItem(STORAGE_KEYS.accessToken) || '',
   refreshToken: localStorage.getItem(STORAGE_KEYS.refreshToken) || '',
   expiresAt: Number(localStorage.getItem(STORAGE_KEYS.expiresAt) || 0),
   pauseTimer: null,
-  sdkReady: false,
-  activatedForMobile: false,
-  lastPlayAttemptAt: 0,
+  activeDeviceId: '',
+  activeDeviceName: '',
 };
 
 const els = {
   connectBtn: document.getElementById('connectBtn'),
   disconnectBtn: document.getElementById('disconnectBtn'),
   stopBtn: document.getElementById('stopBtn'),
+  refreshDeviceBtn: document.getElementById('refreshDeviceBtn'),
   addPlayerBtn: document.getElementById('addPlayerBtn'),
   rosterList: document.getElementById('rosterList'),
   selectedPlayer: document.getElementById('selectedPlayer'),
@@ -66,25 +63,8 @@ function setClipStatus(title = '—', status = 'No clip playing') {
 }
 
 function updateStopButtons() {
-  const canStop = Boolean(state.accessToken && state.playerDeviceId);
+  const canStop = Boolean(state.accessToken && state.activeDeviceId);
   if (els.stopBtn) els.stopBtn.disabled = !canStop;
-}
-
-function isMobileBrowser() {
-  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
-}
-
-async function activateMobilePlayback() {
-  if (!state.player) return;
-  try {
-    await state.player.activateElement();
-    state.activatedForMobile = true;
-    if (isMobileBrowser()) {
-      setPlayerStatus('Phone audio armed', 'Tap a player again if iPhone still pauses the first attempt.');
-    }
-  } catch (err) {
-    setPlayerStatus('Phone audio needs a tap', err?.message || 'Tap a player button again to start audio.');
-  }
 }
 
 function uuid() {
@@ -140,12 +120,8 @@ function parseTimeToMs(value) {
   if (/^\d+$/.test(trimmed)) return Number(trimmed) * 1000;
   const parts = trimmed.split(':').map(Number);
   if (parts.some(Number.isNaN)) return 0;
-  if (parts.length === 2) {
-    return ((parts[0] * 60) + parts[1]) * 1000;
-  }
-  if (parts.length === 3) {
-    return ((parts[0] * 3600) + (parts[1] * 60) + parts[2]) * 1000;
-  }
+  if (parts.length === 2) return ((parts[0] * 60) + parts[1]) * 1000;
+  if (parts.length === 3) return ((parts[0] * 3600) + (parts[1] * 60) + parts[2]) * 1000;
   return 0;
 }
 
@@ -173,6 +149,8 @@ function clearTokens() {
   state.accessToken = '';
   state.refreshToken = '';
   state.expiresAt = 0;
+  state.activeDeviceId = '';
+  state.activeDeviceName = '';
   localStorage.removeItem(STORAGE_KEYS.accessToken);
   localStorage.removeItem(STORAGE_KEYS.refreshToken);
   localStorage.removeItem(STORAGE_KEYS.expiresAt);
@@ -184,8 +162,9 @@ async function sha256(plain) {
   return crypto.subtle.digest('SHA-256', data);
 }
 
-function base64UrlEncode(arrayBuffer) {
-  return btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)))
+function base64UrlEncode(arrayBufferOrBytes) {
+  const bytes = arrayBufferOrBytes instanceof ArrayBuffer ? new Uint8Array(arrayBufferOrBytes) : arrayBufferOrBytes;
+  return btoa(String.fromCharCode(...bytes))
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/g, '');
@@ -275,7 +254,7 @@ async function spotifyFetch(url, options = {}) {
     ...options,
     headers: {
       Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
+      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
       ...(options.headers || {})
     }
   });
@@ -289,7 +268,9 @@ async function spotifyFetch(url, options = {}) {
     const text = await response.text();
     throw new Error(text || `Spotify request failed: ${response.status}`);
   }
-  return response.json();
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) return response.json();
+  return null;
 }
 
 async function handleAuthCallback() {
@@ -310,10 +291,42 @@ async function handleAuthCallback() {
     url.searchParams.delete('code');
     url.searchParams.delete('state');
     url.searchParams.delete('error');
-    window.history.replaceState({}, '', url.pathname);
+    window.history.replaceState({}, '', getRedirectUri());
   } catch (err) {
     setAuthStatus('Connection failed', err.message);
   }
+}
+
+async function fetchDevices() {
+  const data = await spotifyFetch('https://api.spotify.com/v1/me/player/devices');
+  return data?.devices || [];
+}
+
+async function refreshActiveDevice() {
+  if (!state.accessToken) {
+    state.activeDeviceId = '';
+    state.activeDeviceName = '';
+    updateStopButtons();
+    return null;
+  }
+
+  const devices = await fetchDevices();
+  const usable = devices.filter((d) => !d.is_restricted);
+  const active = usable.find((d) => d.is_active) || usable.find((d) => /iphone|android|phone/i.test(`${d.type} ${d.name}`)) || usable[0] || null;
+
+  if (!active) {
+    state.activeDeviceId = '';
+    state.activeDeviceName = '';
+    setPlayerStatus('No active Spotify device', 'Open the Spotify app on your phone first, start any song there, then tap Refresh Device.');
+    updateStopButtons();
+    return null;
+  }
+
+  state.activeDeviceId = active.id;
+  state.activeDeviceName = active.name;
+  setPlayerStatus(`Ready: ${active.name}`, 'Phone mode: this page controls the Spotify app/device instead of playing audio in the browser.');
+  updateStopButtons();
+  return active;
 }
 
 async function stopPlayback() {
@@ -322,14 +335,14 @@ async function stopPlayback() {
     state.pauseTimer = null;
   }
 
-  if (!state.accessToken || !state.playerDeviceId) {
-    setClipStatus('—', 'No clip playing');
-    updateStopButtons();
-    return;
-  }
-
   try {
-    await spotifyFetch(`https://api.spotify.com/v1/me/player/pause?device_id=${encodeURIComponent(state.playerDeviceId)}`, { method: 'PUT' });
+    if (!state.activeDeviceId) await refreshActiveDevice();
+    if (!state.activeDeviceId) {
+      setClipStatus('—', 'No Spotify device selected');
+      return;
+    }
+
+    await spotifyFetch(`https://api.spotify.com/v1/me/player/pause?device_id=${encodeURIComponent(state.activeDeviceId)}`, { method: 'PUT' });
     setClipStatus(els.nowPlaying.textContent || '—', 'Stopped');
   } catch (err) {
     setPlayerStatus('Stop failed', err.message);
@@ -338,14 +351,12 @@ async function stopPlayback() {
 
 function disconnect() {
   clearTokens();
-  if (state.player) {
-    try { state.player.disconnect(); } catch {}
-    state.player = null;
-    state.playerDeviceId = null;
-    state.sdkReady = false;
+  if (state.pauseTimer) {
+    clearTimeout(state.pauseTimer);
+    state.pauseTimer = null;
   }
   setAuthStatus('Not connected', 'Click Connect Spotify to sign in again.');
-  setPlayerStatus('Not ready', 'Reconnect Spotify to create a browser player.');
+  setPlayerStatus('Not ready', 'Reconnect Spotify, then open the Spotify app on your phone and tap Refresh Device.');
   setClipStatus();
   updateStopButtons();
   render();
@@ -530,75 +541,6 @@ async function searchTracks() {
   }
 }
 
-async function initializeSpotifyPlayer() {
-  if (!state.accessToken || state.player || !window.Spotify) return;
-
-  setPlayerStatus('Starting browser player…', 'Accept playback transfer prompts if Spotify asks.');
-
-  const player = new window.Spotify.Player({
-    name: 'Softball Walk-Up Songs',
-    getOAuthToken: async (cb) => cb(await ensureAccessToken()),
-    volume: 0.8,
-  });
-
-  player.addListener('ready', ({ device_id }) => {
-    state.playerDeviceId = device_id;
-    state.sdkReady = true;
-    setPlayerStatus('Ready', 'Browser player connected.');
-    updateStopButtons();
-  });
-
-  player.addListener('not_ready', () => {
-    state.sdkReady = false;
-    state.playerDeviceId = null;
-    setPlayerStatus('Offline', 'Open the page in a desktop browser and reconnect.');
-    updateStopButtons();
-  });
-
-  player.addListener('initialization_error', ({ message }) => {
-    setPlayerStatus('Initialization error', message);
-  });
-
-  player.addListener('authentication_error', ({ message }) => {
-    setPlayerStatus('Authentication error', message);
-  });
-
-  player.addListener('account_error', ({ message }) => {
-    setPlayerStatus('Premium required', message);
-  });
-
-  player.addListener('playback_error', ({ message }) => {
-    setPlayerStatus('Playback error', message);
-  });
-
-  player.addListener('autoplay_failed', () => {
-    setPlayerStatus('Tap again on phone', 'Spotify blocked autoplay in the mobile browser. Tap the same player one more time.');
-  });
-
-  player.addListener('player_state_changed', (sdkState) => {
-    if (!sdkState?.track_window?.current_track) return;
-    const track = sdkState.track_window.current_track;
-    const trackLabel = `${track.name} — ${track.artists.map((a) => a.name).join(', ')}`;
-    if (sdkState.paused && isMobileBrowser() && Date.now() - state.lastPlayAttemptAt < 4000) {
-      setClipStatus(trackLabel, 'Paused by phone browser. Tap this player again.');
-      return;
-    }
-    setClipStatus(trackLabel, sdkState.paused ? 'Paused' : 'Playing');
-  });
-
-  await player.connect();
-  state.player = player;
-}
-
-async function transferPlaybackHere() {
-  if (!state.playerDeviceId) throw new Error('Spotify browser player is not ready yet.');
-
-  await spotifyFetch('https://api.spotify.com/v1/me/player', {
-    method: 'PUT',
-    body: JSON.stringify({ device_ids: [state.playerDeviceId], play: false })
-  });
-}
-
 async function playPlayerClip(playerId) {
   const playerData = state.roster.find((p) => p.id === playerId);
   if (!playerData) return;
@@ -606,14 +548,9 @@ async function playPlayerClip(playerId) {
     setClipStatus(playerData.name || 'Player', 'Select a song first.');
     return;
   }
-
   if (!state.accessToken) {
     setAuthStatus('Not connected', 'Connect Spotify before playing clips.');
     return;
-  }
-
-  if (!state.player) {
-    await initializeSpotifyPlayer();
   }
 
   const startMs = parseTimeToMs(playerData.startTime);
@@ -621,10 +558,10 @@ async function playPlayerClip(playerId) {
   const durationMs = Math.max(1000, endMs - startMs || 15000);
 
   try {
-    state.lastPlayAttemptAt = Date.now();
-    await activateMobilePlayback();
-    await transferPlaybackHere();
-    await spotifyFetch(`https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(state.playerDeviceId)}`, {
+    const device = await refreshActiveDevice();
+    if (!device) return;
+
+    await spotifyFetch(`https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(device.id)}`, {
       method: 'PUT',
       body: JSON.stringify({ uris: [playerData.trackUri], position_ms: startMs })
     });
@@ -632,28 +569,34 @@ async function playPlayerClip(playerId) {
     if (state.pauseTimer) clearTimeout(state.pauseTimer);
     state.pauseTimer = setTimeout(async () => {
       try {
-        await spotifyFetch(`https://api.spotify.com/v1/me/player/pause?device_id=${encodeURIComponent(state.playerDeviceId)}`, { method: 'PUT' });
+        await spotifyFetch(`https://api.spotify.com/v1/me/player/pause?device_id=${encodeURIComponent(device.id)}`, { method: 'PUT' });
         setClipStatus(`${playerData.songTitle} — ${playerData.artist}`, `Stopped at ${playerData.endTime || 'clip end'}`);
       } catch {}
       state.pauseTimer = null;
     }, durationMs);
 
-    setClipStatus(`${playerData.songTitle} — ${playerData.artist}`, `${playerData.name} clip is playing`);
+    setClipStatus(`${playerData.songTitle} — ${playerData.artist}`, `${playerData.name} clip is playing on ${device.name}`);
   } catch (err) {
-    setPlayerStatus('Playback failed', err.message);
+    const message = err.message || 'Playback failed.';
+    if (/NO_ACTIVE_DEVICE|device/i.test(message)) {
+      setPlayerStatus('Open Spotify first', 'Open the Spotify app on your phone, play any song there once, then tap Refresh Device and try again.');
+    } else {
+      setPlayerStatus('Playback failed', message);
+    }
   }
 }
 
 function bindEvents() {
-  document.addEventListener('touchend', () => {
-    if (state.player && isMobileBrowser() && !state.activatedForMobile) {
-      activateMobilePlayback();
-    }
-  }, { passive: true, once: true });
-
   els.connectBtn.addEventListener('click', beginLogin);
   els.disconnectBtn.addEventListener('click', disconnect);
   els.stopBtn.addEventListener('click', stopPlayback);
+  els.refreshDeviceBtn?.addEventListener('click', async () => {
+    try {
+      await refreshActiveDevice();
+    } catch (err) {
+      setPlayerStatus('Device refresh failed', err.message);
+    }
+  });
   els.addPlayerBtn.addEventListener('click', addPlayer);
   els.searchBtn.addEventListener('click', searchTracks);
   els.searchInput.addEventListener('keydown', (event) => {
@@ -665,12 +608,6 @@ function bindEvents() {
   });
 }
 
-window.onSpotifyWebPlaybackSDKReady = async () => {
-  if (state.accessToken) {
-    await initializeSpotifyPlayer();
-  }
-};
-
 async function boot() {
   loadRoster();
   bindEvents();
@@ -678,9 +615,14 @@ async function boot() {
 
   if (state.accessToken) {
     setAuthStatus('Connected', `Redirect URI in Spotify should be ${getRedirectUri()}`);
-    if (window.Spotify) await initializeSpotifyPlayer();
+    try {
+      await refreshActiveDevice();
+    } catch {
+      setPlayerStatus('Open Spotify first', 'Open the Spotify app on your phone, make it the active device, then tap Refresh Device.');
+    }
   } else {
     setAuthStatus('Not connected', `Add ${getRedirectUri()} as a redirect URI in your Spotify app.`);
+    setPlayerStatus('Waiting for Spotify app', 'Phone mode controls the real Spotify app on your phone, not the browser audio player.');
   }
 
   render();

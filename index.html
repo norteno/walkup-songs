@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Softball Walk-Up Songs</title>
   <link rel="stylesheet" href="./styles.css" />
-  <script src="https://sdk.scdn.co/spotify-player.js"></script>
 </head>
 <body>
   <div class="app-shell">
@@ -13,11 +12,12 @@
       <div>
         <p class="eyebrow">Spotify Walk-Up Song Manager</p>
         <h1>Set each player’s song clip and fire it on game day.</h1>
-        <p class="subtext">Search Spotify, save a roster, and play only the section you want for each player.</p>
+        <p class="subtext">Search Spotify, save a roster, and tap a player to control the real Spotify app on your phone.</p>
       </div>
       <div class="hero-actions">
         <button id="connectBtn" class="primary-btn">Connect Spotify</button>
-        <button id="stopBtn" class="stop-btn" disabled>Stop</button>
+        <button id="refreshDeviceBtn" class="secondary-btn">Refresh Device</button>
+        <button id="stopBtn" class="stop-btn" disabled>Stop Music</button>
         <button id="disconnectBtn" class="ghost-btn" hidden>Disconnect</button>
       </div>
     </header>
@@ -26,12 +26,12 @@
       <div class="card status-card">
         <span class="label">Auth</span>
         <strong id="authStatus">Not connected</strong>
-        <small id="authHint">Run this app from http://127.0.0.1:3000 and use the same URL as your Spotify redirect URI.</small>
+        <small id="authHint">Use the same URL here and in your Spotify redirect URI list.</small>
       </div>
       <div class="card status-card">
-        <span class="label">Player</span>
-        <strong id="playerStatus">Not ready</strong>
-        <small id="playerHint">Spotify Premium is required for the Web Playback SDK.</small>
+        <span class="label">Device</span>
+        <strong id="playerStatus">Waiting for Spotify app</strong>
+        <small id="playerHint">Open the Spotify app on your phone first, then tap Refresh Device.</small>
       </div>
       <div class="card status-card">
         <span class="label">Now Playing</span>
@@ -45,7 +45,7 @@
         <div class="panel-head">
           <div>
             <h2>Roster</h2>
-            <p>Tap play to launch a clip. All roster data saves in this browser.</p>
+            <p>Tap play to launch a clip on your active Spotify device. All roster data saves in this browser.</p>
           </div>
           <button id="addPlayerBtn" class="secondary-btn">Add player</button>
         </div>
@@ -77,13 +77,13 @@
     </main>
 
     <section class="card instructions">
-      <h2>Setup</h2>
+      <h2>Phone setup</h2>
       <ol>
-        <li>In your Spotify Developer Dashboard, add <code>http://127.0.0.1:3000/</code> as a Redirect URI.</li>
-        <li>Serve this folder locally with <code>python3 -m http.server 3000</code>.</li>
-        <li>Open <code>http://127.0.0.1:3000/</code> in your browser and connect Spotify.</li>
+        <li>Open the regular Spotify app on your phone and start any song once.</li>
+        <li>Open this walk-up app and tap <code>Refresh Device</code>.</li>
+        <li>Tap a player to play just that clip on your active Spotify device.</li>
       </ol>
-      <p class="small-note">Client ID is already filled in for you. If you ever change it, edit <code>app.js</code>.</p>
+      <p class="small-note">This version controls the Spotify app on your phone instead of trying to play audio inside the mobile browser.</p>
     </section>
   </div>
 
@@ -104,11 +104,11 @@
         <div class="time-grid">
           <label>
             Start
-            <input class="start-input" type="text" placeholder="0:45" />
+            <input class="start-input time-input" type="text" inputmode="numeric" placeholder="0:45" />
           </label>
           <label>
             End
-            <input class="end-input" type="text" placeholder="1:00" />
+            <input class="end-input time-input" type="text" inputmode="numeric" placeholder="1:00" />
           </label>
         </div>
       </div>
