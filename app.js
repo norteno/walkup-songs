@@ -21,6 +21,7 @@ const state = {
   pauseTimer: null,
   activeDeviceId: '',
   activeDeviceName: '',
+  devices: [],
 };
 
 const els = {
@@ -28,9 +29,11 @@ const els = {
   disconnectBtn: document.getElementById('disconnectBtn'),
   stopBtn: document.getElementById('stopBtn'),
   refreshDeviceBtn: document.getElementById('refreshDeviceBtn'),
+  transferBtn: document.getElementById('transferBtn'),
   addPlayerBtn: document.getElementById('addPlayerBtn'),
   rosterList: document.getElementById('rosterList'),
   selectedPlayer: document.getElementById('selectedPlayer'),
+  deviceSelect: document.getElementById('deviceSelect'),
   searchInput: document.getElementById('searchInput'),
   searchBtn: document.getElementById('searchBtn'),
   searchResults: document.getElementById('searchResults'),
@@ -60,6 +63,51 @@ function setPlayerStatus(text, hint = '') {
 function setClipStatus(title = '—', status = 'No clip playing') {
   els.nowPlaying.textContent = title;
   els.clipStatus.textContent = status;
+}
+
+function formatMsToTime(ms) {
+  const totalSeconds = Math.max(0, Math.round(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function adjustTimeValue(value, deltaSeconds) {
+  const current = parseTimeToMs(value);
+  return formatMsToTime(current + deltaSeconds * 1000);
+}
+
+function renderDeviceOptions() {
+  if (!els.deviceSelect) return;
+  els.deviceSelect.innerHTML = '';
+  if (!state.devices.length) {
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = 'No Spotify device found yet';
+    els.deviceSelect.appendChild(option);
+    return;
+  }
+  state.devices.forEach((device) => {
+    const option = document.createElement('option');
+    option.value = device.id;
+    option.textContent = `${device.name} (${device.type})${device.is_active ? ' — active' : ''}${device.is_restricted ? ' — restricted' : ''}`;
+    if (device.id === state.activeDeviceId) option.selected = true;
+    els.deviceSelect.appendChild(option);
+  });
+}
+
+async function transferPlaybackToDevice(deviceId, play = false) {
+  if (!deviceId) throw new Error('Choose a Spotify device first.');
+  await spotifyFetch('https://api.spotify.com/v1/me/player', {
+    method: 'PUT',
+    body: JSON.stringify({ device_ids: [deviceId], play })
+  });
+  const device = state.devices.find((d) => d.id === deviceId);
+  state.activeDeviceId = deviceId;
+  state.activeDeviceName = device?.name || '';
+  renderDeviceOptions();
+  updateStopButtons();
+  setPlayerStatus(`Ready: ${state.activeDeviceName || 'Selected device'}`, 'This phone is selected for Spotify playback control.');
 }
 
 function updateStopButtons() {
@@ -97,6 +145,7 @@ function movePlayer(playerId, direction) {
   const [player] = state.roster.splice(index, 1);
   state.roster.splice(newIndex, 0, player);
   saveRoster();
+  renderDeviceOptions();
   render();
 }
 
@@ -311,6 +360,7 @@ async function refreshActiveDevice() {
   }
 
   const devices = await fetchDevices();
+  state.devices = devices;
   const usable = devices.filter((d) => !d.is_restricted);
   const active = usable.find((d) => d.is_active) || usable.find((d) => /iphone|android|phone/i.test(`${d.type} ${d.name}`)) || usable[0] || null;
 
@@ -324,6 +374,7 @@ async function refreshActiveDevice() {
 
   state.activeDeviceId = active.id;
   state.activeDeviceName = active.name;
+  renderDeviceOptions();
   setPlayerStatus(`Ready: ${active.name}`, 'Phone mode: this page controls the Spotify app/device instead of playing audio in the browser.');
   updateStopButtons();
   return active;
@@ -359,6 +410,7 @@ function disconnect() {
   setPlayerStatus('Not ready', 'Reconnect Spotify, then open the Spotify app on your phone and tap Refresh Device.');
   setClipStatus();
   updateStopButtons();
+  renderDeviceOptions();
   render();
 }
 
@@ -387,6 +439,10 @@ function renderRoster() {
     const moveUpBtn = fragment.querySelector('.move-up-btn');
     const moveDownBtn = fragment.querySelector('.move-down-btn');
     const playBtn = fragment.querySelector('.play-btn');
+    const startMinusBtn = fragment.querySelector('.start-minus-btn');
+    const startPlusBtn = fragment.querySelector('.start-plus-btn');
+    const endMinusBtn = fragment.querySelector('.end-minus-btn');
+    const endPlusBtn = fragment.querySelector('.end-plus-btn');
     const stopCardBtn = fragment.querySelector('.stop-card-btn');
     const deleteBtn = fragment.querySelector('.delete-btn');
 
@@ -422,6 +478,34 @@ function renderRoster() {
     endInput.addEventListener('input', (event) => {
       player.endTime = event.target.value;
       saveRoster();
+    });
+
+    startMinusBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      player.startTime = adjustTimeValue(player.startTime || '0:00', -5);
+      if (parseTimeToMs(player.endTime) < parseTimeToMs(player.startTime)) player.endTime = player.startTime;
+      saveRoster();
+      render();
+    });
+    startPlusBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      player.startTime = adjustTimeValue(player.startTime || '0:00', 5);
+      if (parseTimeToMs(player.endTime) < parseTimeToMs(player.startTime)) player.endTime = adjustTimeValue(player.startTime, 5);
+      saveRoster();
+      render();
+    });
+    endMinusBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      player.endTime = adjustTimeValue(player.endTime || player.startTime || '0:15', -5);
+      if (parseTimeToMs(player.endTime) < parseTimeToMs(player.startTime)) player.endTime = player.startTime;
+      saveRoster();
+      render();
+    });
+    endPlusBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      player.endTime = adjustTimeValue(player.endTime || player.startTime || '0:15', 5);
+      saveRoster();
+      render();
     });
 
     card.addEventListener('click', (event) => {
@@ -486,6 +570,7 @@ function addPlayer() {
   state.roster.push(player);
   state.selectedPlayerId = player.id;
   saveRoster();
+  renderDeviceOptions();
   render();
 }
 
@@ -558,8 +643,14 @@ async function playPlayerClip(playerId) {
   const durationMs = Math.max(1000, endMs - startMs || 15000);
 
   try {
-    const device = await refreshActiveDevice();
+    let device = state.devices.find((d) => d.id === els.deviceSelect?.value && !d.is_restricted) || null;
+    if (!device) device = await refreshActiveDevice();
     if (!device) return;
+
+    if (!device.is_active) {
+      await transferPlaybackToDevice(device.id, false);
+      await new Promise((resolve) => setTimeout(resolve, 600));
+    }
 
     await spotifyFetch(`https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(device.id)}`, {
       method: 'PUT',
@@ -597,6 +688,14 @@ function bindEvents() {
       setPlayerStatus('Device refresh failed', err.message);
     }
   });
+  els.transferBtn?.addEventListener('click', async () => {
+    try {
+      const deviceId = els.deviceSelect?.value;
+      await transferPlaybackToDevice(deviceId, false);
+    } catch (err) {
+      setPlayerStatus('Could not select device', err.message);
+    }
+  });
   els.addPlayerBtn.addEventListener('click', addPlayer);
   els.searchBtn.addEventListener('click', searchTracks);
   els.searchInput.addEventListener('keydown', (event) => {
@@ -605,6 +704,12 @@ function bindEvents() {
   els.selectedPlayer.addEventListener('change', (event) => {
     state.selectedPlayerId = event.target.value;
     render();
+  });
+  els.deviceSelect?.addEventListener('change', (event) => {
+    state.activeDeviceId = event.target.value;
+    const device = state.devices.find((d) => d.id === state.activeDeviceId);
+    state.activeDeviceName = device?.name || '';
+    updateStopButtons();
   });
 }
 
@@ -625,6 +730,7 @@ async function boot() {
     setPlayerStatus('Waiting for Spotify app', 'Phone mode controls the real Spotify app on your phone, not the browser audio player.');
   }
 
+  renderDeviceOptions();
   render();
 }
 

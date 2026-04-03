@@ -17,6 +17,7 @@
       <div class="hero-actions">
         <button id="connectBtn" class="primary-btn">Connect Spotify</button>
         <button id="refreshDeviceBtn" class="secondary-btn">Refresh Device</button>
+        <button id="transferBtn" class="secondary-btn">Use This Phone</button>
         <button id="stopBtn" class="stop-btn" disabled>Stop Music</button>
         <button id="disconnectBtn" class="ghost-btn" hidden>Disconnect</button>
       </div>
@@ -31,7 +32,7 @@
       <div class="card status-card">
         <span class="label">Device</span>
         <strong id="playerStatus">Waiting for Spotify app</strong>
-        <small id="playerHint">Open the Spotify app on your phone first, then tap Refresh Device.</small>
+        <small id="playerHint">Open the Spotify app on your phone first, then tap Refresh Device. Then tap Use This Phone.</small>
       </div>
       <div class="card status-card">
         <span class="label">Now Playing</span>
@@ -65,6 +66,11 @@
           <select id="selectedPlayer"></select>
         </div>
 
+        <div class="field-group">
+          <label for="deviceSelect">Spotify device</label>
+          <select id="deviceSelect"></select>
+        </div>
+
         <div class="search-row">
           <input id="searchInput" type="text" placeholder="Search song or artist" />
           <button id="searchBtn" class="primary-btn">Search</button>
@@ -81,6 +87,7 @@
       <ol>
         <li>Open the regular Spotify app on your phone and start any song once.</li>
         <li>Open this walk-up app and tap <code>Refresh Device</code>.</li>
+        <li>Choose your phone in the Spotify device list, then tap <code>Use This Phone</code>.</li>
         <li>Tap a player to play just that clip on your active Spotify device.</li>
       </ol>
       <p class="small-note">This version controls the Spotify app on your phone instead of trying to play audio inside the mobile browser.</p>
@@ -102,14 +109,26 @@
         </div>
         <div class="song-meta empty-song">No song selected</div>
         <div class="time-grid">
-          <label>
-            Start
-            <input class="start-input time-input" type="text" inputmode="numeric" placeholder="0:45" />
-          </label>
-          <label>
-            End
-            <input class="end-input time-input" type="text" inputmode="numeric" placeholder="1:00" />
-          </label>
+          <div class="time-control">
+            <label>
+              Start
+              <input class="start-input time-input" type="text" inputmode="numeric" placeholder="0:45" />
+            </label>
+            <div class="time-stepper">
+              <button class="step-btn start-minus-btn" type="button">-5s</button>
+              <button class="step-btn start-plus-btn" type="button">+5s</button>
+            </div>
+          </div>
+          <div class="time-control">
+            <label>
+              End
+              <input class="end-input time-input" type="text" inputmode="numeric" placeholder="1:00" />
+            </label>
+            <div class="time-stepper">
+              <button class="step-btn end-minus-btn" type="button">-5s</button>
+              <button class="step-btn end-plus-btn" type="button">+5s</button>
+            </div>
+          </div>
         </div>
       </div>
     </article>
