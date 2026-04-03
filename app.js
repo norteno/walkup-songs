@@ -45,7 +45,7 @@ const els = {
 };
 
 function getRedirectUri() {
-  return window.location.href.split('?')[0].split('#')[0];
+  return `${window.location.origin}${window.location.pathname.replace(/index\.html$/, '')}`;
 }
 
 function setAuthStatus(text, hint = '') {
