@@ -45,7 +45,8 @@ function createDefaultPlayer() {
     sourceName: '',
     albumImage: '',
     startTime: '0:00',
-    endTime: '0:15'
+    endTime: '0:15',
+    collapsed: false
   };
 }
 
@@ -194,6 +195,7 @@ function updatePlayer(playerId, updates) {
   const player = state.roster.find((item) => item.id === playerId);
   if (!player) return;
   Object.assign(player, updates);
+  if (typeof player.collapsed !== 'boolean') player.collapsed = false;
   saveRoster();
   render();
 }
@@ -349,10 +351,16 @@ function renderRoster() {
     const upBtn = fragment.querySelector('.move-up-btn');
     const downBtn = fragment.querySelector('.move-down-btn');
     const chooseFromLibraryBtn = fragment.querySelector('.choose-from-library-btn');
+    const details = fragment.querySelector('.player-details');
+    const collapseBtn = fragment.querySelector('.collapse-btn');
 
+    if (typeof player.collapsed !== 'boolean') player.collapsed = false;
     if (nameInput) nameInput.value = player.name || '';
     if (startInput) startInput.value = player.startTime || '0:00';
     if (endInput) endInput.value = player.endTime || '0:15';
+
+    if (card) card.classList.toggle('is-collapsed', !!player.collapsed);
+    if (collapseBtn) collapseBtn.textContent = player.collapsed ? 'Show details' : 'Hide details';
 
     if (songMeta && (player.songTitle || player.sourceName)) {
       songMeta.classList.remove('empty-song');
@@ -386,6 +394,10 @@ function renderRoster() {
     deleteBtn?.addEventListener('click', () => deletePlayer(player.id));
     upBtn?.addEventListener('click', () => movePlayer(player.id, -1));
     downBtn?.addEventListener('click', () => movePlayer(player.id, 1));
+    collapseBtn?.addEventListener('click', () => {
+      updatePlayer(player.id, { collapsed: !player.collapsed });
+    });
+
     chooseFromLibraryBtn?.addEventListener('click', () => {
       state.selectedPlayerId = player.id;
       renderSelectedPlayerOptions();
@@ -398,8 +410,12 @@ function renderRoster() {
     if (downBtn && index === state.roster.length - 1) downBtn.disabled = true;
 
     card?.addEventListener('click', (event) => {
-      if (event.target.closest('button, input, label')) return;
+      if (event.target.closest('button, input, label, select')) return;
       state.selectedPlayerId = player.id;
+      if (player.collapsed) {
+        updatePlayer(player.id, { collapsed: false });
+        return;
+      }
       renderSelectedPlayerOptions();
       renderLibraryResults();
     });

@@ -105,30 +105,36 @@
           </div>
         </div>
 
-        <div class="song-meta empty-song">No song selected</div>
+        <div class="player-details">
+          <div class="song-meta empty-song">No song selected</div>
 
-        <div class="source-row">
-          <button class="source-btn choose-from-library-btn" type="button">Choose repo song</button>
-        </div>
+          <div class="source-row">
+            <button class="source-btn choose-from-library-btn" type="button">Choose repo song</button>
+          </div>
 
-        <div class="time-grid mobile-time-grid">
-          <div class="time-control big-time-control">
-            <span class="time-label">Start</span>
-            <div class="time-editor single-input-editor">
-              <input class="start-input time-input big-time-input" type="text" inputmode="numeric" placeholder="0:45" />
+          <div class="time-grid mobile-time-grid">
+            <div class="time-control big-time-control">
+              <span class="time-label">Start</span>
+              <div class="time-editor single-input-editor">
+                <input class="start-input time-input big-time-input" type="text" inputmode="numeric" placeholder="0:45" />
+              </div>
+            </div>
+            <div class="time-control big-time-control">
+              <span class="time-label">End</span>
+              <div class="time-editor single-input-editor">
+                <input class="end-input time-input big-time-input" type="text" inputmode="numeric" placeholder="1:00" />
+              </div>
             </div>
           </div>
-          <div class="time-control big-time-control">
-            <span class="time-label">End</span>
-            <div class="time-editor single-input-editor">
-              <input class="end-input time-input big-time-input" type="text" inputmode="numeric" placeholder="1:00" />
-            </div>
+
+          <div class="collapse-row">
+            <button class="ghost-btn collapse-btn" type="button">Hide details</button>
           </div>
         </div>
       </div>
     </article>
   </template>
 
-  <script type="module" src="./app.js?v=1"></script>
+  <script type="module" src="./app.js?v=2"></script>
 </body>
 </html>
