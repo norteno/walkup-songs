@@ -1,36 +1,23 @@
-# Local Walk-Up Songs App
+# Walk-Up Songs (GitHub repo songs only)
 
-This version removes Spotify completely and plays local audio files instead.
+This version uses only audio files stored in your GitHub Pages repo.
 
-## Quick start
+## Setup
 
-Open `index.html` from your GitHub Pages site or from a simple local server.
+1. Put your audio files in `songs/`
+2. List them in `songs/manifest.json`
+3. Open the app on GitHub Pages
+4. Search and assign songs to players
 
-## Two ways to add songs
-
-### Option 1: put songs in your GitHub repo
-
-Create a `songs/` folder and add audio files plus a `manifest.json` file.
-
-Example:
+## Example manifest
 
 ```json
 {
   "songs": [
-    { "title": "Thunder", "artist": "Team Mix", "file": "song1.mp3" },
+    { "title": "Thunder", "artist": "Team Mix", "file": "thunder.mp3" },
     { "title": "Fireball", "artist": "Pitbull", "file": "fireball.mp3" }
   ]
 }
 ```
 
-If you want album art, add an `image` field pointing to a file path or URL.
-
-### Option 2: upload files inside the app
-
-Use the **Upload song** button or **Upload for player** on a player card.
-Those uploaded files are stored in browser local storage for that device/browser.
-
-## Notes
-
-- This version is much better for iPhone/iPad because it does not rely on Spotify auth or browser SDK playback.
-- Only use audio files you have permission to use.
+Use only the filename in `file`, not `songs/thunder.mp3`.

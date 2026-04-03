@@ -12,7 +12,7 @@
       <div>
         <p class="eyebrow">Local Walk-Up Song Manager</p>
         <h1>Tap a player and play the exact clip.</h1>
-        <p class="subtext">No Spotify required. Use uploaded audio files or songs stored in your GitHub repo.</p>
+        <p class="subtext">No Spotify required. Songs load from your GitHub repo so they work across phone, iPad, and desktop.</p>
       </div>
       
     </header>
@@ -21,12 +21,12 @@
       <div class="card status-card">
         <span class="label">Mode</span>
         <strong>Local audio</strong>
-        <small>Works with audio files you upload or place in <code>songs/</code> on GitHub Pages.</small>
+        <small>Works with songs stored in <code>songs/</code> on GitHub Pages.</small>
       </div>
       <div class="card status-card">
         <span class="label">Library</span>
         <strong id="libraryStatus">Checking for repo songs…</strong>
-        <small id="libraryHint">Add <code>songs/manifest.json</code> plus your audio files, or upload files inside the app.</small>
+        <small id="libraryHint">Add <code>songs/manifest.json</code> plus your audio files.</small>
       </div>
       <div class="card status-card">
         <span class="label">Now Playing</span>
@@ -46,7 +46,7 @@
         <div class="panel-head">
           <div>
             <h2>Roster</h2>
-            <p>Choose a song source for each player, set the clip, then tap play on game day. Your roster saves in this browser.</p>
+            <p>Choose a repo song for each player, set the clip, then tap play on game day. Your roster saves in this browser.</p>
           </div>
         </div>
         <div id="rosterList" class="roster-list"></div>
@@ -56,7 +56,7 @@
         <div class="panel-head">
           <div>
             <h2>Song Library</h2>
-            <p>Repo songs come from <code>songs/manifest.json</code>. Uploaded songs stay in this browser on this device.</p>
+            <p>Songs come from <code>songs/manifest.json</code> in your GitHub repo.</p>
           </div>
         </div>
 
@@ -65,13 +65,8 @@
           <select id="selectedPlayer"></select>
         </div>
 
-        <div class="library-actions">
-          <label class="file-label primary-btn" for="fileInput">Upload song</label>
-          <input id="fileInput" type="file" accept="audio/*" hidden />
-        </div>
-
         <div class="field-group">
-          <label for="librarySearch">Search repo songs</label>
+          <label for="librarySearch">Search songs</label>
           <input id="librarySearch" type="text" placeholder="Search title or artist" />
         </div>
 
@@ -115,10 +110,6 @@
 
         <div class="source-row">
           <button class="source-btn choose-from-library-btn" type="button">Choose repo song</button>
-          <label class="source-btn upload-for-player-label">
-            Upload for player
-            <input class="upload-for-player-input" type="file" accept="audio/*" hidden />
-          </label>
         </div>
 
         <div class="time-grid mobile-time-grid">

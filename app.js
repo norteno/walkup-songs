@@ -9,7 +9,6 @@ const state = {
   librarySongs: [],
   pauseTimer: null,
   currentAudio: null,
-  currentObjectUrl: null,
   topInfoHidden: false,
 };
 
@@ -22,7 +21,6 @@ const els = {
   setupInstructions: document.getElementById('setupInstructions'),
   rosterList: document.getElementById('rosterList'),
   selectedPlayer: document.getElementById('selectedPlayer'),
-  fileInput: document.getElementById('fileInput'),
   librarySearch: document.getElementById('librarySearch'),
   libraryResults: document.getElementById('libraryResults'),
   libraryStatus: document.getElementById('libraryStatus'),
@@ -42,11 +40,10 @@ function createDefaultPlayer() {
     name: `Player ${state.roster.length + 1}`,
     songTitle: '',
     artist: '',
-    sourceType: '', // repo | upload
+    sourceType: 'repo',
     sourcePath: '',
     sourceName: '',
     albumImage: '',
-    uploadDataUrl: '',
     startTime: '0:00',
     endTime: '0:15'
   };
@@ -89,10 +86,6 @@ function formatMsToTime(ms) {
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
-function adjustTimeValue(value, deltaSeconds) {
-  return formatMsToTime(parseTimeToMs(value) + (deltaSeconds * 1000));
-}
-
 function setClipStatus(title = '—', status = 'No clip playing') {
   els.nowPlaying.textContent = title;
   els.clipStatus.textContent = status;
@@ -103,14 +96,8 @@ function getSelectedPlayer() {
 }
 
 function getPlayableSource(player) {
-  if (!player) return null;
-  if (player.sourceType === 'repo' && player.sourcePath) {
-    return new URL(`./songs/${player.sourcePath}`, window.location.href).toString();
-  }
-  if (player.sourceType === 'upload' && player.uploadDataUrl) {
-    return player.uploadDataUrl;
-  }
-  return null;
+  if (!player || !player.sourcePath) return null;
+  return new URL(`./songs/${player.sourcePath}`, window.location.href).toString();
 }
 
 function stopPlayback() {
@@ -129,7 +116,7 @@ async function playPlayer(playerId) {
 
   const source = getPlayableSource(player);
   if (!source) {
-    alert('Pick a repo song or upload an audio file for this player first.');
+    alert('Choose a repo song for this player first.')
     return;
   }
 
@@ -214,38 +201,6 @@ function deletePlayer(playerId) {
   render();
 }
 
-async function fileToDataUrl(file) {
-  return await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-async function assignUploadedSongToPlayer(playerId, file) {
-  if (!file) return;
-  const dataUrl = await fileToDataUrl(file);
-  const title = file.name.replace(/\.[^.]+$/, '');
-  updatePlayer(playerId, {
-    sourceType: 'upload',
-    sourcePath: '',
-    sourceName: file.name,
-    songTitle: title,
-    artist: 'Uploaded audio',
-    albumImage: '',
-    uploadDataUrl: dataUrl
-  });
-}
-
-async function handleTopUpload(event) {
-  const file = event.target.files?.[0];
-  const player = getSelectedPlayer();
-  if (!file || !player) return;
-  await assignUploadedSongToPlayer(player.id, file);
-  event.target.value = '';
-}
-
 function assignRepoSongToPlayer(playerId, song) {
   updatePlayer(playerId, {
     sourceType: 'repo',
@@ -253,8 +208,7 @@ function assignRepoSongToPlayer(playerId, song) {
     sourceName: song.file,
     songTitle: song.title || song.file,
     artist: song.artist || 'Repo song',
-    albumImage: song.image || '',
-    uploadDataUrl: ''
+    albumImage: song.image || ''
   });
 }
 
@@ -275,7 +229,7 @@ async function loadRepoSongs() {
   } catch {
     state.librarySongs = [];
     els.libraryStatus.textContent = 'No repo songs found yet';
-    els.libraryHint.textContent = 'That is okay — you can still upload audio files right inside the app.';
+    els.libraryHint.textContent = 'Add a songs folder and manifest.json to your GitHub repo, then refresh the page.';
   }
   renderLibraryResults();
 }
@@ -302,7 +256,7 @@ function renderLibraryResults() {
   els.libraryResults.innerHTML = '';
   if (!songs.length) {
     els.libraryResults.className = 'search-results empty-state';
-    els.libraryResults.textContent = state.librarySongs.length ? 'No songs match that search.' : 'No repo songs loaded yet. Add songs/manifest.json or upload files inside the app.';
+    els.libraryResults.textContent = state.librarySongs.length ? 'No songs match that search.' : 'No repo songs loaded yet. Add songs/manifest.json in your GitHub repo.';
     return;
   }
 
@@ -359,7 +313,6 @@ function renderRoster() {
     const upBtn = fragment.querySelector('.move-up-btn');
     const downBtn = fragment.querySelector('.move-down-btn');
     const chooseFromLibraryBtn = fragment.querySelector('.choose-from-library-btn');
-    const uploadForPlayerInput = fragment.querySelector('.upload-for-player-input');
 
     nameInput.value = player.name || '';
     startInput.value = player.startTime || '0:00';
@@ -373,14 +326,14 @@ function renderRoster() {
             <img src="${player.albumImage}" alt="${player.songTitle || 'Song art'}" />
             <div>
               <strong>${escapeHtml(player.songTitle || player.sourceName)}</strong>
-              <span>${escapeHtml(player.artist || (player.sourceType === 'repo' ? 'Repo song' : 'Uploaded audio'))}</span>
+              <span>${escapeHtml(player.artist || 'Repo song')}</span>
             </div>
           </div>
         `;
       } else {
         songMeta.innerHTML = `
           <strong>${escapeHtml(player.songTitle || player.sourceName)}</strong>
-          <span>${escapeHtml(player.artist || (player.sourceType === 'repo' ? 'Repo song' : 'Uploaded audio'))}</span>
+          <span>${escapeHtml(player.artist || 'Repo song')}</span>
         `;
       }
     }
@@ -404,12 +357,6 @@ function renderRoster() {
       renderLibraryResults();
       els.librarySearch.scrollIntoView({ behavior: 'smooth', block: 'center' });
       els.librarySearch.focus();
-    });
-    uploadForPlayerInput.addEventListener('change', async (event) => {
-      const file = event.target.files?.[0];
-      if (!file) return;
-      await assignUploadedSongToPlayer(player.id, file);
-      event.target.value = '';
     });
 
     if (index === 0) upBtn.disabled = true;
@@ -460,7 +407,6 @@ function bindEvents() {
     state.selectedPlayerId = event.target.value;
     renderLibraryResults();
   });
-  els.fileInput.addEventListener('change', handleTopUpload);
   els.librarySearch.addEventListener('input', renderLibraryResults);
 }
 
