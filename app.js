@@ -23,6 +23,8 @@ const state = {
   expiresAt: Number(localStorage.getItem(STORAGE_KEYS.expiresAt) || 0),
   pauseTimer: null,
   sdkReady: false,
+  activatedForMobile: false,
+  lastPlayAttemptAt: 0,
 };
 
 const els = {
@@ -66,6 +68,23 @@ function setClipStatus(title = '—', status = 'No clip playing') {
 function updateStopButtons() {
   const canStop = Boolean(state.accessToken && state.playerDeviceId);
   if (els.stopBtn) els.stopBtn.disabled = !canStop;
+}
+
+function isMobileBrowser() {
+  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
+}
+
+async function activateMobilePlayback() {
+  if (!state.player) return;
+  try {
+    await state.player.activateElement();
+    state.activatedForMobile = true;
+    if (isMobileBrowser()) {
+      setPlayerStatus('Phone audio armed', 'Tap a player again if iPhone still pauses the first attempt.');
+    }
+  } catch (err) {
+    setPlayerStatus('Phone audio needs a tap', err?.message || 'Tap a player button again to start audio.');
+  }
 }
 
 function uuid() {
@@ -552,10 +571,19 @@ async function initializeSpotifyPlayer() {
     setPlayerStatus('Playback error', message);
   });
 
+  player.addListener('autoplay_failed', () => {
+    setPlayerStatus('Tap again on phone', 'Spotify blocked autoplay in the mobile browser. Tap the same player one more time.');
+  });
+
   player.addListener('player_state_changed', (sdkState) => {
     if (!sdkState?.track_window?.current_track) return;
     const track = sdkState.track_window.current_track;
-    setClipStatus(`${track.name} — ${track.artists.map((a) => a.name).join(', ')}`, sdkState.paused ? 'Paused' : 'Playing');
+    const trackLabel = `${track.name} — ${track.artists.map((a) => a.name).join(', ')}`;
+    if (sdkState.paused && isMobileBrowser() && Date.now() - state.lastPlayAttemptAt < 4000) {
+      setClipStatus(trackLabel, 'Paused by phone browser. Tap this player again.');
+      return;
+    }
+    setClipStatus(trackLabel, sdkState.paused ? 'Paused' : 'Playing');
   });
 
   await player.connect();
@@ -593,6 +621,8 @@ async function playPlayerClip(playerId) {
   const durationMs = Math.max(1000, endMs - startMs || 15000);
 
   try {
+    state.lastPlayAttemptAt = Date.now();
+    await activateMobilePlayback();
     await transferPlaybackHere();
     await spotifyFetch(`https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(state.playerDeviceId)}`, {
       method: 'PUT',
@@ -615,6 +645,12 @@ async function playPlayerClip(playerId) {
 }
 
 function bindEvents() {
+  document.addEventListener('touchend', () => {
+    if (state.player && isMobileBrowser() && !state.activatedForMobile) {
+      activateMobilePlayback();
+    }
+  }, { passive: true, once: true });
+
   els.connectBtn.addEventListener('click', beginLogin);
   els.disconnectBtn.addEventListener('click', disconnect);
   els.stopBtn.addEventListener('click', stopPlayback);
