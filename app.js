@@ -31,7 +31,9 @@ const els = {
 };
 
 function uuid() {
-  return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 function createDefaultPlayer() {
@@ -74,6 +76,7 @@ function loadRoster() {
 
 function parseTimeToMs(value) {
   if (!value) return 0;
+
   const trimmed = String(value).trim();
   if (/^\d+$/.test(trimmed)) return Number(trimmed) * 1000;
 
@@ -92,8 +95,8 @@ function parseTimeToMs(value) {
 }
 
 function setClipStatus(title = '—', status = 'No clip playing') {
-  els.nowPlaying.textContent = title;
-  els.clipStatus.textContent = status;
+  if (els.nowPlaying) els.nowPlaying.textContent = title;
+  if (els.clipStatus) els.clipStatus.textContent = status;
 }
 
 function getSelectedPlayer() {
@@ -102,7 +105,15 @@ function getSelectedPlayer() {
 
 function getPlayableSource(player) {
   if (!player || !player.sourcePath) return null;
-  return new URL(`./songs/${player.sourcePath}`, window.location.href).toString();
+
+  const rawPath = String(player.sourcePath).trim();
+  if (!rawPath) return null;
+
+  const normalizedPath = rawPath.startsWith('songs/')
+    ? rawPath
+    : `songs/${rawPath}`;
+
+  return new URL(`./${normalizedPath}`, window.location.href).toString();
 }
 
 function stopPlayback() {
@@ -192,7 +203,6 @@ async function playPlayer(playerId) {
   try {
     audio.load();
 
-    // Critical for mobile browsers: first play must happen directly from the tap.
     await audio.play();
 
     if (audio.readyState >= 1) {
@@ -266,8 +276,12 @@ function assignRepoSongToPlayer(playerId, song) {
 }
 
 async function loadRepoSongs() {
-  els.libraryStatus.textContent = 'Checking for repo songs…';
-  els.libraryHint.textContent = 'Looking for songs/manifest.json...';
+  if (els.libraryStatus) {
+    els.libraryStatus.textContent = 'Checking for repo songs…';
+  }
+  if (els.libraryHint) {
+    els.libraryHint.textContent = 'Looking for songs/manifest.json...';
+  }
 
   try {
     const manifestUrl = `./songs/manifest.json?v=${Date.now()}`;
@@ -283,23 +297,38 @@ async function loadRepoSongs() {
     state.librarySongs = songs.filter((song) => song && song.file);
 
     if (state.librarySongs.length) {
-      els.libraryStatus.textContent = `${state.librarySongs.length} repo song${state.librarySongs.length === 1 ? '' : 's'} loaded`;
-      els.libraryHint.textContent = 'Tap “Choose” to assign one to the selected player.';
+      if (els.libraryStatus) {
+        els.libraryStatus.textContent = `${state.librarySongs.length} repo song${state.librarySongs.length === 1 ? '' : 's'} loaded`;
+      }
+      if (els.libraryHint) {
+        els.libraryHint.textContent = 'Tap “Choose” to assign one to the selected player.';
+      }
     } else {
-      els.libraryStatus.textContent = 'Manifest found, but no songs listed';
-      els.libraryHint.textContent = 'Check songs/manifest.json and make sure each song has a file value.';
+      if (els.libraryStatus) {
+        els.libraryStatus.textContent = 'Manifest found, but no songs listed';
+      }
+      if (els.libraryHint) {
+        els.libraryHint.textContent = 'Check songs/manifest.json and make sure each song has a file value.';
+      }
     }
   } catch (error) {
     console.error('Could not load repo songs:', error);
     state.librarySongs = [];
-    els.libraryStatus.textContent = 'No repo songs found yet';
-    els.libraryHint.textContent = 'Add a songs folder and valid manifest.json to your GitHub repo, then refresh the page.';
+
+    if (els.libraryStatus) {
+      els.libraryStatus.textContent = 'No repo songs found yet';
+    }
+    if (els.libraryHint) {
+      els.libraryHint.textContent = 'Add a songs folder and valid manifest.json to your GitHub repo, then refresh the page.';
+    }
   }
 
   renderLibraryResults();
 }
 
 function renderSelectedPlayerOptions() {
+  if (!els.selectedPlayer) return;
+
   els.selectedPlayer.innerHTML = '';
 
   state.roster.forEach((player) => {
@@ -316,8 +345,10 @@ function renderSelectedPlayerOptions() {
 }
 
 function renderLibraryResults() {
+  if (!els.libraryResults) return;
+
   const player = getSelectedPlayer();
-  const query = (els.librarySearch.value || '').trim().toLowerCase();
+  const query = (els.librarySearch?.value || '').trim().toLowerCase();
 
   const songs = state.librarySongs.filter((song) => {
     if (!query) return true;
@@ -382,6 +413,8 @@ function applyTopInfoVisibility() {
 }
 
 function renderRoster() {
+  if (!els.rosterList || !els.template) return;
+
   els.rosterList.innerHTML = '';
 
   state.roster.forEach((player, index) => {
@@ -398,11 +431,11 @@ function renderRoster() {
     const downBtn = fragment.querySelector('.move-down-btn');
     const chooseFromLibraryBtn = fragment.querySelector('.choose-from-library-btn');
 
-    nameInput.value = player.name || '';
-    startInput.value = player.startTime || '0:00';
-    endInput.value = player.endTime || '0:15';
+    if (nameInput) nameInput.value = player.name || '';
+    if (startInput) startInput.value = player.startTime || '0:00';
+    if (endInput) endInput.value = player.endTime || '0:15';
 
-    if (player.songTitle || player.sourceName) {
+    if (songMeta && (player.songTitle || player.sourceName)) {
       songMeta.classList.remove('empty-song');
 
       if (player.albumImage) {
@@ -423,38 +456,38 @@ function renderRoster() {
       }
     }
 
-    nameInput.addEventListener('input', (event) => {
+    nameInput?.addEventListener('input', (event) => {
       player.name = event.target.value;
       saveRoster();
       renderSelectedPlayerOptions();
     });
 
-    startInput.addEventListener('change', (event) => {
+    startInput?.addEventListener('change', (event) => {
       updatePlayer(player.id, { startTime: event.target.value || '0:00' });
     });
 
-    endInput.addEventListener('change', (event) => {
+    endInput?.addEventListener('change', (event) => {
       updatePlayer(player.id, { endTime: event.target.value || '0:15' });
     });
 
-    playBtn.addEventListener('click', () => playPlayer(player.id));
-    stopBtn.addEventListener('click', stopPlayback);
-    deleteBtn.addEventListener('click', () => deletePlayer(player.id));
-    upBtn.addEventListener('click', () => movePlayer(player.id, -1));
-    downBtn.addEventListener('click', () => movePlayer(player.id, 1));
+    playBtn?.addEventListener('click', () => playPlayer(player.id));
+    stopBtn?.addEventListener('click', stopPlayback);
+    deleteBtn?.addEventListener('click', () => deletePlayer(player.id));
+    upBtn?.addEventListener('click', () => movePlayer(player.id, -1));
+    downBtn?.addEventListener('click', () => movePlayer(player.id, 1));
 
-    chooseFromLibraryBtn.addEventListener('click', () => {
+    chooseFromLibraryBtn?.addEventListener('click', () => {
       state.selectedPlayerId = player.id;
       renderSelectedPlayerOptions();
       renderLibraryResults();
-      els.librarySearch.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      els.librarySearch.focus();
+      els.librarySearch?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      els.librarySearch?.focus();
     });
 
-    if (index === 0) upBtn.disabled = true;
-    if (index === state.roster.length - 1) downBtn.disabled = true;
+    if (upBtn && index === 0) upBtn.disabled = true;
+    if (downBtn && index === state.roster.length - 1) downBtn.disabled = true;
 
-    card.addEventListener('click', (event) => {
+    card?.addEventListener('click', (event) => {
       if (event.target.closest('button, input, label')) return;
       state.selectedPlayerId = player.id;
       renderSelectedPlayerOptions();
@@ -482,9 +515,9 @@ function escapeHtml(value) {
 }
 
 function bindEvents() {
-  els.stopBtn.addEventListener('click', stopPlayback);
+  els.stopBtn?.addEventListener('click', stopPlayback);
 
-  els.addPlayerBtn.addEventListener('click', () => {
+  els.addPlayerBtn?.addEventListener('click', () => {
     const player = createDefaultPlayer();
     state.roster.push(player);
     state.selectedPlayerId = player.id;
@@ -492,18 +525,18 @@ function bindEvents() {
     render();
   });
 
-  els.toggleSetupBtn.addEventListener('click', () => {
+  els.toggleSetupBtn?.addEventListener('click', () => {
     state.topInfoHidden = !state.topInfoHidden;
     localStorage.setItem(STORAGE_KEYS.topInfoHidden, String(state.topInfoHidden));
     applyTopInfoVisibility();
   });
 
-  els.selectedPlayer.addEventListener('change', (event) => {
+  els.selectedPlayer?.addEventListener('change', (event) => {
     state.selectedPlayerId = event.target.value;
     renderLibraryResults();
   });
 
-  els.librarySearch.addEventListener('input', renderLibraryResults);
+  els.librarySearch?.addEventListener('input', renderLibraryResults);
 }
 
 async function init() {
