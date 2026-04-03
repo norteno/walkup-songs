@@ -45,7 +45,7 @@ const els = {
 };
 
 function getRedirectUri() {
-  return `https://norteno.github.io/walkup-songs/`;
+  return window.location.href.split('?')[0].split('#')[0];
 }
 
 function setAuthStatus(text, hint = '') {
