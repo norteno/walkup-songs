@@ -16,6 +16,7 @@ const els = {
   stopBtn: document.getElementById('stopBtn'),
   addPlayerBtn: document.getElementById('addPlayerBtn'),
   toggleSetupBtn: document.getElementById('toggleSetupBtn'),
+  collapseAllBtn: document.getElementById('collapseAllBtn'),
   setupHero: document.getElementById('setupHero'),
   setupStatus: document.getElementById('setupStatus'),
   setupInstructions: document.getElementById('setupInstructions'),
@@ -360,6 +361,7 @@ function renderRoster() {
     if (endInput) endInput.value = player.endTime || '0:15';
 
     if (card) card.classList.toggle('is-collapsed', !!player.collapsed);
+    if (details) details.hidden = !!player.collapsed;
     if (collapseBtn) collapseBtn.textContent = player.collapsed ? 'Show details' : 'Hide details';
 
     if (songMeta && (player.songTitle || player.sourceName)) {
@@ -444,6 +446,12 @@ function bindEvents() {
     state.topInfoHidden = !state.topInfoHidden;
     localStorage.setItem(STORAGE_KEYS.topInfoHidden, String(state.topInfoHidden));
     applyTopInfoVisibility();
+  });
+  els.collapseAllBtn?.addEventListener('click', () => {
+    const shouldCollapse = state.roster.some((player) => !player.collapsed);
+    state.roster = state.roster.map((player) => ({ ...player, collapsed: shouldCollapse }));
+    saveRoster();
+    render();
   });
   els.selectedPlayer?.addEventListener('change', (event) => {
     state.selectedPlayerId = event.target.value;
