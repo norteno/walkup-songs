@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Softball Walk-Up Songs</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <script src="https://sdk.scdn.co/spotify-player.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Spotify Walk-Up Song Manager</p>
+        <h1>Set each player’s song clip and fire it on game day.</h1>
+        <p class="subtext">Search Spotify, save a roster, and play only the section you want for each player.</p>
+      </div>
+      <div class="hero-actions">
+        <button id="connectBtn" class="primary-btn">Connect Spotify</button>
+        <button id="stopBtn" class="stop-btn" disabled>Stop</button>
+        <button id="disconnectBtn" class="ghost-btn" hidden>Disconnect</button>
+      </div>
+    </header>
+
+    <section class="status-grid">
+      <div class="card status-card">
+        <span class="label">Auth</span>
+        <strong id="authStatus">Not connected</strong>
+        <small id="authHint">Run this app from http://127.0.0.1:3000 and use the same URL as your Spotify redirect URI.</small>
+      </div>
+      <div class="card status-card">
+        <span class="label">Player</span>
+        <strong id="playerStatus">Not ready</strong>
+        <small id="playerHint">Spotify Premium is required for the Web Playback SDK.</small>
+      </div>
+      <div class="card status-card">
+        <span class="label">Now Playing</span>
+        <strong id="nowPlaying">—</strong>
+        <small id="clipStatus">No clip playing</small>
+      </div>
+    </section>
+
+    <main class="main-grid">
+      <section class="card roster-panel">
+        <div class="panel-head">
+          <div>
+            <h2>Roster</h2>
+            <p>Tap play to launch a clip. All roster data saves in this browser.</p>
+          </div>
+          <button id="addPlayerBtn" class="secondary-btn">Add player</button>
+        </div>
+        <div id="rosterList" class="roster-list"></div>
+      </section>
+
+      <section class="card search-panel">
+        <div class="panel-head">
+          <div>
+            <h2>Song Search</h2>
+            <p>Pick a player, search for a track, and assign it.</p>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label for="selectedPlayer">Editing player</label>
+          <select id="selectedPlayer"></select>
+        </div>
+
+        <div class="search-row">
+          <input id="searchInput" type="text" placeholder="Search song or artist" />
+          <button id="searchBtn" class="primary-btn">Search</button>
+        </div>
+
+        <div id="searchResults" class="search-results empty-state">
+          Connect Spotify, select a player, and search for a song.
+        </div>
+      </section>
+    </main>
+
+    <section class="card instructions">
+      <h2>Setup</h2>
+      <ol>
+        <li>In your Spotify Developer Dashboard, add <code>http://127.0.0.1:3000/</code> as a Redirect URI.</li>
+        <li>Serve this folder locally with <code>python3 -m http.server 3000</code>.</li>
+        <li>Open <code>http://127.0.0.1:3000/</code> in your browser and connect Spotify.</li>
+      </ol>
+      <p class="small-note">Client ID is already filled in for you. If you ever change it, edit <code>app.js</code>.</p>
+    </section>
+  </div>
+
+  <template id="playerCardTemplate">
+    <article class="player-card">
+      <div class="player-main">
+        <div class="player-header-row">
+          <input class="player-name-input" type="text" placeholder="Player name" />
+          <div class="player-actions">
+            <button class="icon-btn move-btn move-up-btn" title="Move up">↑</button>
+            <button class="icon-btn move-btn move-down-btn" title="Move down">↓</button>
+            <button class="icon-btn play-btn" title="Play clip">▶</button>
+            <button class="icon-btn stop-card-btn" title="Stop clip">■</button>
+            <button class="icon-btn delete-btn" title="Delete player">✕</button>
+          </div>
+        </div>
+        <div class="song-meta empty-song">No song selected</div>
+        <div class="time-grid">
+          <label>
+            Start
+            <input class="start-input" type="text" placeholder="0:45" />
+          </label>
+          <label>
+            End
+            <input class="end-input" type="text" placeholder="1:00" />
+          </label>
+        </div>
+      </div>
+    </article>
+  </template>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
